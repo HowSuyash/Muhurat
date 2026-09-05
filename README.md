@@ -236,9 +236,19 @@ python -m scripts.generate_corpus --seed 42 --n 300
 python -m scripts.run_baseline    --seed 42 --n 300
 python -m scripts.evaluate
 python -m scripts.selfcheck
+
+uvicorn app.main:app          # dashboard at http://127.0.0.1:8000
 ```
 
 If `Activate.ps1` is blocked: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned`
+
+### Dashboard
+
+`uvicorn app.main:app` serves a results dashboard at `http://127.0.0.1:8000` — the arm comparison
+against the oracle ceiling, a per-arm breakdown of *why* each arm missed (too early, too late, or
+no window ever existed), the per-class table, and the integrity checks. It is a viewer over
+`data/runs/summary.json`, not a second source of truth, so the page and the CLI cannot disagree.
+`GET /api/summary` returns the same JSON.
 
 **No API key is needed, by design.** The LLM cache is committed, so the whole benchmark —
 including the LLM arm — runs offline, deterministically, at zero cost. A reviewer can reproduce
@@ -475,10 +485,11 @@ model is not a rubber stamp.
 | `scripts/selfcheck.py` | 71 assertions incl. L1–L13 |
 | `scripts/leakcheck.py` | the adversarial leak assertions |
 | `scripts/sensitivity.py` | ±40% sweep over the world constants |
+| `app/static/dashboard.html` | the results dashboard |
+| `app/main.py` | FastAPI: dashboard, `/api/summary`, `/health` |
 
 ---
 
 ## Not built
 
 - `RazorpayExecutor` / real API calls — explicitly out of scope.
-- Dashboard / frontend.

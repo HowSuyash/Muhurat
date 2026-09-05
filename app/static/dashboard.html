@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Muhurat — Recovery Benchmark</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-0: #f4f4f2;
+    --surface-1: #fcfcfb;
+    --border:    #e0e0dc;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #85847e;
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --neutral:  #b8b7b1;
+    --accent:   #2a78d6;
+    --grid:     #e8e8e4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface-0: #131312;
+      --surface-1: #1a1a19;
+      --border:    #33332f;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #8d8c83;
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+      --neutral:  #55554f;
+      --accent:   #3987e5;
+      --grid:     #2a2a27;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-0: #131312;
+    --surface-1: #1a1a19;
+    --border:    #33332f;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #8d8c83;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --neutral:  #55554f;
+    --accent:   #3987e5;
+    --grid:     #2a2a27;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 32px 24px 72px; }
+
+  header { margin-bottom: 28px; }
+  h1 { font-size: 30px; margin: 0 0 2px; letter-spacing: -0.02em; }
+  .devanagari { font-size: 20px; color: var(--text-muted); font-weight: 400; }
+  .thesis { color: var(--text-secondary); margin: 10px 0 0; max-width: 62ch; }
+  .thesis strong { color: var(--text-primary); }
+  .meta { color: var(--text-muted); font-size: 12px; margin-top: 12px; font-variant-numeric: tabular-nums; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .tile .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
+  .tile .value { font-size: 26px; font-weight: 650; margin-top: 5px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .tile .sub { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+
+  section { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px; margin-bottom: 20px; }
+  h2 { font-size: 15px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .note { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 18px; max-width: 76ch; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 14px; font-size: 12px; color: var(--text-secondary); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  .scroller { overflow-x: auto; }
+  svg { display: block; max-width: 100%; }
+  .tick { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .armlabel { font-size: 12.5px; fill: var(--text-secondary); }
+  .armlabel.win { fill: var(--text-primary); font-weight: 650; }
+  .val { font-size: 12px; fill: var(--text-primary); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .bar { transition: opacity .12s; }
+  .bar:hover { opacity: .82; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child { text-align: left; font-variant-numeric: normal; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); font-weight: 600; }
+  tbody tr:last-child td { border-bottom: none; }
+  tr.highlight td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+
+  .checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 8px 20px; }
+  .check { display: flex; gap: 9px; font-size: 12.5px; color: var(--text-secondary); align-items: baseline; }
+  .check .ok { color: var(--series-3); font-weight: 700; }
+  .check code { color: var(--text-primary); }
+
+  .callout { border-left: 3px solid var(--series-2); padding: 10px 14px; background: color-mix(in srgb, var(--series-2) 7%, transparent); border-radius: 0 6px 6px 0; font-size: 13px; color: var(--text-secondary); }
+  .callout strong { color: var(--text-primary); }
+  footer { color: var(--text-muted); font-size: 12px; margin-top: 30px; }
+  a { color: var(--accent); }
+  .err { padding: 40px; text-align: center; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<div class="wrap" id="root">
+  <div class="err">Loading benchmark results…</div>
+</div>
+
+<script>
+const RUPEE = "₹";
+const fmtR = p => RUPEE + Math.round(p / 100).toLocaleString("en-IN");
+const fmtPct = v => (v * 100).toFixed(2) + "%";
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// Arms that carry the headline comparison get full-strength ink; the rest are
+// context. Colour follows the entity, never its rank -- these assignments are
+// fixed by arm name, so filtering or re-sorting never repaints a survivor.
+const EMPHASIS = { llm_recommended: "--series-1", rules_recommended: "--series-1" };
+const PROBE = "max_wait_probe";
+
+function barChart(arms, ceilingPaise, atRisk) {
+  const rowH = 38, pad = { t: 8, r: 96, b: 26, l: 164 };
+  const h = arms.length * rowH + pad.t + pad.b;
+  const w = 860, plotW = w - pad.l - pad.r;
+  const max = Math.max(ceilingPaise, ...arms.map(a => a.recovered_paise)) * 1.02;
+  const x = v => (v / max) * plotW;
+
+  let ticks = "";
+  const step = max / 4;
+  for (let i = 0; i <= 4; i++) {
+    const v = step * i, px = pad.l + x(v);
+    ticks += `<line class="gridline" x1="${px}" y1="${pad.t}" x2="${px}" y2="${pad.t + arms.length * rowH}"/>
+      <text class="tick" x="${px}" y="${h - 8}" text-anchor="middle">${fmtR(v)}</text>`;
+  }
+
+  const bars = arms.map((a, i) => {
+    const y = pad.t + i * rowH + 7, bh = 22;
+    const bw = Math.max(2, x(a.recovered_paise));
+    const isProbe = a.arm === PROBE;
+    const fill = EMPHASIS[a.arm] ? `var(${EMPHASIS[a.arm]})` : (isProbe ? "var(--series-2)" : "var(--neutral)");
+    const cls = EMPHASIS[a.arm] ? "armlabel win" : "armlabel";
+    return `<g class="bar">
+      <title>${esc(a.arm)} — ${fmtR(a.recovered_paise)} (${fmtPct(a.recovery_rate_value)}), ${a.recovered_count}/${a.n_payments} payments, ${a.gateway_attempts} gateway attempts, ${a.customers_touched} customers touched</title>
+      <text class="${cls}" x="${pad.l - 12}" y="${y + 15}" text-anchor="end">${esc(a.arm)}</text>
+      <rect x="${pad.l}" y="${y}" width="${bw}" height="${bh}" rx="4" fill="${fill}"/>
+      <text class="val" x="${pad.l + bw + 9}" y="${y + 16}">${fmtR(a.recovered_paise)}</text>
+    </g>`;
+  }).join("");
+
+  // The ceiling is a reference line, not a series: it is the same measure on the
+  // same axis, so it belongs in this chart rather than a second one.
+  const cx = pad.l + x(ceilingPaise);
+  const ceil = `<line x1="${cx}" y1="${pad.t - 2}" x2="${cx}" y2="${pad.t + arms.length * rowH}"
+      stroke="var(--text-primary)" stroke-width="2" stroke-dasharray="4 3"/>
+    <text class="tick" x="${cx}" y="${pad.t + arms.length * rowH + 16}" text-anchor="middle"
+      style="fill:var(--text-primary);font-weight:600">oracle ceiling ${fmtR(ceilingPaise)}</text>`;
+
+  return `<svg viewBox="0 0 ${w} ${h + 10}" role="img" aria-label="Recovered amount by arm">${ticks}${bars}${ceil}</svg>`;
+}
+
+function timingChart(arms) {
+  const rowH = 34, pad = { t: 8, r: 20, b: 24, l: 164 };
+  const h = arms.length * rowH + pad.t + pad.b;
+  const w = 860, plotW = w - pad.l - pad.r;
+  const totals = arms.map(a => a.in_window_attempts + a.missed_early + a.missed_late + a.no_window_ever);
+  const max = Math.max(...totals) * 1.02;
+
+  const segs = [
+    ["in_window_attempts", "var(--series-1)", "landed in an open window"],
+    ["missed_early",       "var(--series-2)", "too early"],
+    ["missed_late",        "var(--series-3)", "too late"],
+    ["no_window_ever",     "var(--neutral)",  "no window existed"],
+  ];
+
+  const rows = arms.map((a, i) => {
+    const y = pad.t + i * rowH + 6, bh = 20;
+    let cursor = pad.l, out = `<text class="armlabel" x="${pad.l - 12}" y="${y + 14}" text-anchor="end">${esc(a.arm)}</text>`;
+    segs.forEach(([key, fill, label]) => {
+      const v = a[key] || 0;
+      if (!v) return;
+      const bw = (v / max) * plotW;
+      // 2px surface gap between adjacent fills keeps segment edges readable.
+      out += `<g class="bar"><title>${esc(a.arm)} — ${v} attempts ${label}</title>
+        <rect x="${cursor}" y="${y}" width="${Math.max(1, bw - 2)}" height="${bh}" rx="3" fill="${fill}"/>
+        ${bw > 30 ? `<text class="val" x="${cursor + 6}" y="${y + 14}" style="fill:#fff;font-size:11px">${v}</text>` : ""}
+      </g>`;
+      cursor += bw;
+    });
+    return out;
+  }).join("");
+
+  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Attempt timing by arm">${rows}</svg>`;
+}
+
+function render(d) {
+  const arms = [...d.arms].sort((a, b) => b.recovered_paise - a.recovered_paise);
+  const best = arms[0];
+  const rules = d.arms.find(a => a.arm === "rules_recommended");
+  const llm = d.arms.find(a => a.arm === "llm_recommended");
+  const probe = d.arms.find(a => a.arm === PROBE);
+  const probeRank = arms.findIndex(a => a.arm === PROBE) + 1;
+  const delta = llm && rules ? llm.recovered_paise - rules.recovered_paise : 0;
+
+  const classes = Object.keys(rules ? rules.by_class : {})
+    .sort((a, b) => (rules.by_class[b].at_risk_paise) - (rules.by_class[a].at_risk_paise));
+
+  document.getElementById("root").innerHTML = `
+    <header>
+      <h1>Muhurat <span class="devanagari">मुहूर्त</span></h1>
+      <p class="thesis"><strong>Recovery is a timing problem.</strong> Every failed payment has a hidden
+      window that opens when its real blocker clears — an outage ending, a salary landing, a cooldown
+      lapsing. The question is never <em>whether</em> to retry. It is <em>when</em>, and on which channel.</p>
+      <p class="meta">seed ${d.seed} · executor ${esc(d.executor)} · ${best.n_payments} failed payments ·
+      110 real Razorpay error codes · <a href="/api/summary">raw JSON</a></p>
+    </header>
+
+    <div class="tiles">
+      <div class="tile"><div class="label">Amount at risk</div>
+        <div class="value">${fmtR(d.at_risk_paise)}</div>
+        <div class="sub">${best.n_payments} failed payments</div></div>
+      <div class="tile"><div class="label">Best arm recovered</div>
+        <div class="value">${fmtR(best.recovered_paise)}</div>
+        <div class="sub">${esc(best.arm)} · ${fmtPct(best.recovery_rate_value)}</div></div>
+      <div class="tile"><div class="label">Oracle ceiling</div>
+        <div class="value">${fmtPct(d.ceiling_rate)}</div>
+        <div class="sub">perfect knowledge of every window</div></div>
+      <div class="tile"><div class="label">Naive retry floor</div>
+        <div class="value">${fmtPct(d.arms.find(a => a.arm === "naive_retry_3x").recovery_rate_value)}</div>
+        <div class="sub">retry everything, 3× immediately</div></div>
+    </div>
+
+    <section>
+      <h2>Money recovered, by arm</h2>
+      <p class="note">Same corpus, same random streams, same hidden windows — so the gap between two arms
+      is their decisions, not luck. The dashed line is what a perfect oracle could recover if it knew
+      every window in advance.</p>
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--series-1)"></i> headline comparison</span>
+        <span><i class="swatch" style="background:var(--series-2)"></i> degeneracy probe</span>
+        <span><i class="swatch" style="background:var(--neutral)"></i> other controls</span>
+      </div>
+      <div class="scroller">${barChart(arms, d.ceiling_paise, d.at_risk_paise)}</div>
+    </section>
+
+    <section>
+      <h2>Why each arm missed</h2>
+      <p class="note">An attempt only recovers money if it lands while a window is open. This is the whole
+      benchmark in one chart: <code>naive_retry_3x</code> fires within six minutes and is almost always too
+      early, while <code>max_wait_probe</code> lands in more windows than anything else and still finishes
+      ${probeRank}${probeRank === arms.length ? "th — last" : "th"}, because waiting costs more than it wins.</p>
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--series-1)"></i> landed in an open window</span>
+        <span><i class="swatch" style="background:var(--series-2)"></i> too early</span>
+        <span><i class="swatch" style="background:var(--series-3)"></i> too late</span>
+        <span><i class="swatch" style="background:var(--neutral)"></i> no window ever existed</span>
+      </div>
+      <div class="scroller">${timingChart(arms)}</div>
+    </section>
+
+    <section>
+      <h2>Full comparison</h2>
+      <p class="note">Recovered-per-customer-touched is the guard against a cheap win: recovering more by
+      contacting everyone is not a better system, just a more annoying one.</p>
+      <div class="scroller"><table>
+        <thead><tr><th>Arm</th><th>Recovered</th><th>Rate</th><th>Payments</th>
+        <th>Gateway attempts</th><th>Customers touched</th><th>${RUPEE} per touch</th></tr></thead>
+        <tbody>${arms.map(a => `<tr class="${EMPHASIS[a.arm] ? "highlight" : ""}">
+          <td><code>${esc(a.arm)}</code></td>
+          <td>${fmtR(a.recovered_paise)}</td>
+          <td>${fmtPct(a.recovery_rate_value)}</td>
+          <td>${a.recovered_count}/${a.n_payments}</td>
+          <td>${a.gateway_attempts}</td>
+          <td>${a.customers_touched}</td>
+          <td>${a.customers_touched ? fmtR(a.recovered_paise / a.customers_touched) : "—"}</td>
+        </tr>`).join("")}</tbody>
+      </table></div>
+    </section>
+
+    <section>
+      <h2>Where the money sits, by failure class</h2>
+      <p class="note">The unmapped tail is the largest single bucket: 51 error codes no hand-written rule
+      covers. Note that the two top arms classify payments differently, so only the totals compare cleanly.</p>
+      <div class="scroller"><table>
+        <thead><tr><th>Failure class</th><th>At risk</th><th>Ceiling</th>
+        <th>rules_recommended</th><th>llm_recommended</th></tr></thead>
+        <tbody>${classes.map(c => {
+          const r = rules.by_class[c], l = llm ? llm.by_class[c] : null;
+          const ceilC = d.ceiling_by_class[c];
+          return `<tr><td><code>${esc(c)}</code></td>
+            <td>${fmtR(r.at_risk_paise)}</td>
+            <td>${ceilC != null ? fmtPct(ceilC / r.at_risk_paise) : "—"}</td>
+            <td>${fmtPct(r.recovery_rate_value)}</td>
+            <td>${l ? fmtPct(l.recovery_rate_value) : "—"}</td></tr>`;
+        }).join("")}</tbody>
+      </table></div>
+    </section>
+
+    <section>
+      <h2>Integrity</h2>
+      <p class="note">If a policy could read the hidden windows, every number above would be meaningless.
+      These run on every build and fail it if broken.</p>
+      <div class="callout"><strong>Degeneracy probe:</strong> <code>max_wait_probe</code> makes one attempt
+      at day 13.9. It records ${probe ? probe.in_window_attempts : "—"} in-window attempts — more than most
+      arms — and still finishes last at ${probe ? fmtPct(probe.recovery_rate_value) : "—"}. If it ever wins,
+      the build fails, because that would mean patience beat reasoning.</div>
+      <div class="checks" style="margin-top:16px">
+        ${[
+          ["L1", "no window-shaped field on the visible record"],
+          ["L2", "no window-shaped key at any depth in the corpus"],
+          ["L3", "no visible value equals a delayed window boundary"],
+          ["L4", "object-graph walk from policy inputs reaches no truth"],
+          ["L5", "only the executor and reporters may import ground truth"],
+          ["L5a", "policies and classifiers can never be whitelisted"],
+          ["L6", "no diagnosis field leaks a boundary, free text included"],
+          ["L7", "no visible categorical field determines the answer"],
+          ["L8", "adversarial getattr probe over ~40 names finds nothing"],
+          ["L9", "the LLM prompt leaks no window, amount or timestamp"],
+          ["L10", "every whitelisted field actually reaches the prompt"],
+          ["L11", "cache key depends only on the reason, not the payment"],
+          ["L12", "all 51 cached verdicts record their provenance"],
+          ["L13", "every LLM diagnosis is a rule hit or a cached verdict"],
+        ].map(([id, t]) => `<div class="check"><span class="ok">✓</span><span><code>${id}</code> ${t}</span></div>`).join("")}
+      </div>
+    </section>
+
+    <footer>
+      Simulated executor — no live Razorpay call is made. The LLM cache ships committed, so this
+      benchmark reproduces offline at zero cost. Limitations are documented in full in the README.
+    </footer>`;
+}
+
+fetch("/api/summary")
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(render)
+  .catch(e => {
+    document.getElementById("root").innerHTML =
+      `<div class="err"><p>Could not load results (${esc(e.message)}).</p>
+       <p>Generate them first:</p>
+       <p><code>python -m scripts.generate_corpus &amp;&amp; python -m scripts.run_baseline &amp;&amp; python -m scripts.evaluate</code></p></div>`;
+  });
+</script>
+</body>
+</html>

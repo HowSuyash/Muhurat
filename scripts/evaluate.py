@@ -30,7 +30,7 @@ from app.corpus.generator import read_corpus
 # every arm has finished, and explains results rather than making decisions.
 # selfcheck L5 whitelists exactly this module, app/execution/window.py and
 # selfcheck itself -- any other importer fails the build.
-from app.corpus.truth import load_ground_truth
+from app.corpus.truth import load_ground_truth, load_world
 
 RUNS_DIR = Path(__file__).resolve().parents[1] / "data" / "runs"
 LATEST_PATH = RUNS_DIR / "latest.json"
@@ -45,6 +45,45 @@ _CHANNEL_OF: dict[str, str] = {
     "REQUEST_NEW_INSTRUMENT": "contact",
     "REQUEST_NEW_MANDATE": "contact",
 }
+
+
+def oracle_ceiling(payments, truth: dict) -> tuple[int, dict[str, int]]:
+    """What a perfect window-oracle could recover, in total and per class.
+
+    Computed here rather than in its own module so that `app/` gains no new
+    importer of ground truth -- evaluate.py already runs after every arm has
+    finished and is whitelisted by L5.
+
+    The retry channel genuinely re-rolls across attempts; rail and contact are
+    one-shot facts about the customer, so they get a single draw. That mirrors
+    app/execution/window.py exactly.
+    """
+    import math
+    from app.diagnosis.classifier import RulesClassifier
+
+    c = load_world().constants
+    clf = RulesClassifier()
+    total = 0.0
+    per_class: dict[str, float] = defaultdict(float)
+
+    for p in payments:
+        t = truth.get(p.payment_id)
+        if t is None:
+            continue
+        created = datetime.fromisoformat(p.created_at)
+        best = 0.0
+        for channel in ("retry", "rail", "contact"):
+            w = t.window(channel)
+            if w is None:
+                continue
+            days = max(0.0, (w[0] - created).total_seconds() / 86400.0)
+            p1 = c.p_in(channel) * math.exp(-c.attrition_lambda * days)
+            tries = 3 if channel == "retry" else 1
+            best = max(best, 1.0 - (1.0 - p1) ** tries)
+        total += best * p.amount_paise
+        per_class[str(clf.classify(p.error).failure_class)] += best * p.amount_paise
+
+    return int(total), {k: int(v) for k, v in per_class.items()}
 
 
 def rupees(paise: int) -> str:
@@ -286,9 +325,19 @@ def main() -> None:
     print_comparison(arms)
 
     out_path = args.json_out or (RUNS_DIR / "summary.json")
+    ceiling_paise, ceiling_by_class = (0, {})
+    if truth is not None:
+        ceiling_paise, ceiling_by_class = oracle_ceiling(payments, truth)
+
+    total_at_risk = sum(p.amount_paise for p in payments)
     payload = {
         "seed": manifest["seed"],
         "corpus": manifest["corpus"],
+        "executor": manifest.get("executor", "legacy"),
+        "at_risk_paise": total_at_risk,
+        "ceiling_paise": ceiling_paise,
+        "ceiling_rate": (ceiling_paise / total_at_risk) if total_at_risk else 0.0,
+        "ceiling_by_class": ceiling_by_class,
         "arms": [
             {
                 "arm": a.arm,
