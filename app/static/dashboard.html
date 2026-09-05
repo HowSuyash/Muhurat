@@ -219,77 +219,135 @@ function pageProblem(){
   'where timing decides outcomes — and it is built so that no policy, including ours, can cheat.</p>';
 }
 
-/* ============================ PAGE 2 — WINDOW ============================ */
-let winT=6;
+/* ============================ PAGE — WINDOW ============================ */
+// Deliberately NOT insufficient_funds. "Wait for payday" is common sense and
+// demonstrates nothing. These three are cases where the obvious move is the
+// wrong one -- which is the only kind of case worth building a system for.
+const SCEN=[
+ {id:"bank_technical_error",
+  label:"bank_technical_error",
+  blurb:"The issuer is down. Everyone&rsquo;s instinct is to retry straight away.",
+  instinct:"Retry immediately",
+  blocked:3.2, span:168, blockedLabel:"outage in progress",
+  openLabel:"outage ends — window opens",
+  early:"<b>You are retrying inside the same outage that just rejected you.</b> The bank has not come "+
+        "back yet, so this attempt fails for exactly the reason the last one did — and the naive policy "+
+        "spends all three of its attempts here, inside the first six minutes.",
+  ok:"<b>The outage has cleared.</b> Same card, same customer, same amount — the only thing that changed "+
+     "is the hour. This is the entire thesis in one payment."},
+ {id:"otp_attempts_exceeded",
+  label:"otp_attempts_exceeded",
+  blurb:"The customer mistyped the OTP too many times. The instinct is to send them a fresh link.",
+  instinct:"Message the customer a new payment link",
+  blocked:14, span:168, blockedLabel:"issuer has locked the card",
+  openLabel:"cooldown lapses — window opens",
+  early:"<b>Messaging the customer cannot help here.</b> The issuer has temporarily locked the card after "+
+        "too many attempts — it is not a customer problem any more. You would spend a contact, annoy "+
+        "someone, and still fail. This is the case where the obvious move is the wrong one.",
+  ok:"<b>The cooldown has lapsed and the card works again.</b> Nobody had to be contacted; the fix was "+
+     "waiting for the issuer, not chasing the customer."},
+ {id:"deemed_transaction",
+  label:"deemed_transaction",
+  blurb:"The acquirer does not know whether this succeeded. It settles at the next reconciliation.",
+  instinct:"Treat it as failed and retry",
+  blocked:9, span:168, blockedLabel:"outcome genuinely unknown",
+  openLabel:"reconciliation settles it",
+  early:"<b>Retrying now risks charging the customer twice.</b> Nobody knows yet whether the first "+
+        "attempt went through — that is what &ldquo;deemed&rdquo; means. This is the one failure where "+
+        "the aggressive policy is not just wasteful, it is harmful.",
+  ok:"<b>Reconciliation has settled it.</b> Now you know what actually happened, and can act on a fact "+
+     "instead of a guess."}
+];
+let winS=0, winT=1.5;
+
 function windowViz(){
+  const sc=SCEN[winS];
   const w=1120,h=210,padL=70,padR=40,padT=34;
-  const span=336, x=hr=>padL+(hr/span)*(w-padL-padR);
-  const open=48, close=336;
-  let s='<svg viewBox="0 0 '+w+' '+h+'" role="img" aria-label="A single payment: when its window is open">';
-  for(let d=0;d<=14;d+=2){const px=x(d*24);
+  const span=sc.span, x=hr=>padL+(hr/span)*(w-padL-padR);
+  let s='<svg viewBox="0 0 '+w+' '+h+'" role="img" aria-label="One payment: when its window is open">';
+  const days=Math.round(span/24);
+  for(let d=0;d<=days;d+=(days>10?2:1)){const px=x(d*24);
     s+='<line x1="'+px+'" y1="'+(padT-8)+'" x2="'+px+'" y2="'+(padT+96)+'" stroke="rgba(255,255,255,.05)"/>'+
        '<text x="'+px+'" y="'+(padT+116)+'" text-anchor="middle" fill="'+CSS("--ink3")+
        '" font-size="10" font-family="IBM Plex Mono, monospace">day '+d+'</text>';}
-  s+='<rect x="'+x(0)+'" y="'+padT+'" width="'+(x(open)-x(0))+'" height="46" fill="rgba(224,102,58,.13)" rx="3"/>'+
-     '<text x="'+((x(0)+x(open))/2)+'" y="'+(padT+27)+'" text-anchor="middle" fill="'+CSS("--ember")+
-     '" font-size="11" font-family="IBM Plex Mono, monospace">blocked — no balance</text>';
-  const grad='<defs><linearGradient id="wg" x1="0" x2="1"><stop offset="0" stop-color="'+CSS("--flame")+
-    '" stop-opacity=".45"/><stop offset="1" stop-color="'+CSS("--flame")+'" stop-opacity=".08"/></linearGradient></defs>';
-  s+=grad+'<rect x="'+x(open)+'" y="'+padT+'" width="'+(x(close)-x(open))+'" height="46" fill="url(#wg)" rx="3"/>'+
-     '<line x1="'+x(open)+'" y1="'+(padT-6)+'" x2="'+x(open)+'" y2="'+(padT+52)+'" stroke="'+CSS("--flame")+'" stroke-width="2"/>'+
-     '<text x="'+(x(open)+8)+'" y="'+(padT-12)+'" fill="'+CSS("--flame")+
-     '" font-size="11" font-family="IBM Plex Mono, monospace">salary lands — window opens</text>';
-  // the viewer's chosen attempt
-  const px=x(winT), inside=winT>=open;
+  s+='<rect x="'+x(0)+'" y="'+padT+'" width="'+Math.max(2,x(sc.blocked)-x(0))+'" height="46" '+
+     'fill="rgba(224,102,58,.16)" rx="3"/>';
+  if(x(sc.blocked)-x(0)>90)
+    s+='<text x="'+((x(0)+x(sc.blocked))/2)+'" y="'+(padT+27)+'" text-anchor="middle" fill="'+CSS("--ember")+
+       '" font-size="11" font-family="IBM Plex Mono, monospace">'+sc.blockedLabel+'</text>';
+  s+='<defs><linearGradient id="wg" x1="0" x2="1"><stop offset="0" stop-color="'+CSS("--flame")+
+     '" stop-opacity=".45"/><stop offset="1" stop-color="'+CSS("--flame")+'" stop-opacity=".07"/></linearGradient></defs>'+
+     '<rect x="'+x(sc.blocked)+'" y="'+padT+'" width="'+(x(span)-x(sc.blocked))+'" height="46" fill="url(#wg)" rx="3"/>'+
+     '<line x1="'+x(sc.blocked)+'" y1="'+(padT-6)+'" x2="'+x(sc.blocked)+'" y2="'+(padT+52)+'" stroke="'+
+     CSS("--flame")+'" stroke-width="2"/>'+
+     '<text x="'+(x(sc.blocked)+8)+'" y="'+(padT-12)+'" fill="'+CSS("--flame")+
+     '" font-size="11" font-family="IBM Plex Mono, monospace">'+sc.openLabel+'</text>';
+  const px=x(winT), inside=winT>=sc.blocked;
   const decay=Math.exp(-0.10*(winT/24));
   const p=(inside?0.90:0.02)*decay;
   s+='<line x1="'+px+'" y1="'+(padT+56)+'" x2="'+px+'" y2="'+(padT+96)+'" stroke="'+CSS("--ink")+'" stroke-width="1.5"/>'+
      '<circle cx="'+px+'" cy="'+(padT+96)+'" r="6" fill="'+(inside?CSS("--hot"):CSS("--dim"))+
      '" stroke="'+CSS("--ink")+'" stroke-width="1.5"/>'+
-     '<text x="'+px+'" y="'+(padT+88)+'" text-anchor="middle" fill="'+CSS("--ink")+
+     '<text x="'+Math.min(px,w-padR-46)+'" y="'+(padT+88)+'" text-anchor="middle" fill="'+CSS("--ink")+
      '" font-size="11" font-family="IBM Plex Mono, monospace">your retry</text></svg>';
-  return {svg:s,p:p,inside:inside};
+  return {svg:s,p:p,inside:inside,sc:sc};
 }
+
+function winWhen(){
+  const h=winT;
+  return h<1?(Math.round(h*60)+" min"):h<48?((+h.toFixed(1))+" h"):((h/24).toFixed(1)+" d");
+}
+function winReadout(v){
+  return 'retry at <b style="color:var(--ink)">+'+winWhen()+'</b> → success '+
+    '<b style="color:'+(v.inside?"var(--hot)":"var(--ember)")+'">'+pct1(v.p)+'</b>';
+}
+function winNote(v){
+  return v.inside
+    ? v.sc.ok+' Waiting '+(winT/24).toFixed(1)+' days has already cost you '+
+      pct1(1-Math.exp(-0.10*(winT/24)))+' of the value to attrition, so later is not free either.'
+    : v.sc.early;
+}
+
 function pageWindow(){
   const v=windowViz();
   return '<div class="eyebrow">The mechanic</div>'+
   '<h1>Every payment hides a <em>window</em>.</h1>'+
-  '<p class="lede">It opens the moment the real blocker clears, and it decays from there because customers '+
-  'drift away. A policy never sees it — it has to infer when it opened, and pay for guessing wrong in either '+
-  'direction.</p>'+
-  '<div class="panel"><h2>Try it — one insufficient_funds payment</h2>'+
-  '<p class="sub">This customer&rsquo;s salary lands on day 2. Drag to choose when you retry.</p>'+
+  '<p class="lede">It opens the moment the real blocker clears, and decays from there because customers '+
+  'drift away. A policy never sees it — it has to infer when it opened, and it pays for guessing wrong '+
+  '<strong>in either direction</strong>.</p>'+
+  '<div class="panel"><h2>Try it — three failures where the obvious move is wrong</h2>'+
+  '<div class="chips" style="margin:0 0 14px">'+SCEN.map(function(s,i){
+    return '<button class="chip" data-s="'+i+'" aria-pressed="'+(i===winS)+'"'+
+      (i===winS?' style="color:var(--flame)"':'')+'>'+esc(s.label)+'</button>'}).join("")+'</div>'+
+  '<p class="sub" id="wblurb">'+v.sc.blurb+' Most systems would <b style="color:var(--ember)">'+
+  v.sc.instinct.toLowerCase()+'</b>. Drag to see what that actually costs.</p>'+
   '<div class="scroll" id="wviz">'+v.svg+'</div>'+
   '<div class="transport" style="margin-top:6px">'+
-  '<input type="range" id="wslide" min="0" max="336" step="1" value="'+winT+'" aria-label="Choose when to retry">'+
-  '<div class="mono" style="font-size:12px;color:var(--ink3);min-width:230px;text-align:right">'+
-  'retry at <b style="color:var(--ink)">day '+(winT/24).toFixed(1)+'</b> → success '+
-  '<b style="color:'+(v.inside?"var(--hot)":"var(--ember)")+'">'+pct1(v.p)+'</b></div></div>'+
-  '<div class="flag" style="margin-top:16px">'+(v.inside
-    ? '<b>Inside the window.</b> But you still lose value to attrition: waiting '+(winT/24).toFixed(1)+
-      ' days costs '+pct1(1-Math.exp(-0.10*(winT/24)))+' of what an instant recovery would have been worth. '+
-      'Being right late is worth far less than being right early.'
-    : '<b>Too early.</b> The account is still empty, so this attempt is near-worthless — and it is not free: '+
-      'it costs a gateway attempt and, on some rails, a worse risk score.')+'</div></div>'+
+  '<input type="range" id="wslide" min="0" max="'+v.sc.span+'" step="0.25" value="'+winT+'" '+
+  'aria-label="Choose when to retry">'+
+  '<div class="mono" id="wread" style="font-size:12px;color:var(--ink3);min-width:220px;text-align:right">'+
+  winReadout(v)+'</div></div>'+
+  '<div class="flag" id="wnote" style="margin-top:16px">'+winNote(v)+'</div></div>'+
 
   '<div class="grid2">'+
   '<div class="panel"><h2>Three channels, not one</h2>'+
   '<p class="sub">Each payment has up to three ways back, each with its own window.</p>'+
   '<div class="step"><span class="stepnum" style="color:var(--a1)">◆</span><div><h3>Retry</h3>'+
-  '<p>Same instrument, same rail, later. Opens when the blocker clears — an outage ending, a salary landing, '+
-  'a cooldown lapsing.</p></div></div>'+
+  '<p>Same instrument, same rail, later. Opens when the blocker clears — an outage ending, a salary '+
+  'landing, a cooldown lapsing.</p></div></div>'+
   '<div class="step"><span class="stepnum" style="color:var(--a3)">◆</span><div><h3>Switch rail</h3>'+
   '<p>Move the payment to UPI. Usually open immediately, but it depends on a fixed fact about the '+
   'customer — so trying three times is worth exactly as much as trying once.</p></div></div>'+
   '<div class="step"><span class="stepnum" style="color:var(--a2)">◆</span><div><h3>Contact</h3>'+
-  '<p>Ask the customer to act. The highest-friction option, and the eval charges for it: recovering more by '+
-  'contacting everybody is not a better system.</p></div></div></div>'+
+  '<p>Ask the customer to act. The highest-friction option, and the eval charges for it: recovering more '+
+  'by contacting everybody is not a better system.</p></div></div></div>'+
 
   '<div class="panel"><h2>Why the world cannot be gamed</h2>'+
-  '<p class="sub">The obvious way to build this benchmark is rigged. If you write success probabilities into '+
-  'a config keyed by failure type, you have authored the reward function that makes your own agent win.</p>'+
-  '<p class="sub">So there are exactly <b style="color:var(--flame)">six global constants</b>, none of them '+
-  'keyed by failure class:</p>'+
+  '<p class="sub">The obvious way to build this benchmark is rigged. If you write success probabilities '+
+  'into a config keyed by failure type, you have authored the reward function that makes your own agent '+
+  'win.</p>'+
+  '<p class="sub">So there are exactly <b style="color:var(--flame)">six global constants</b>, none of '+
+  'them keyed by failure class:</p>'+
   '<div class="mono" style="font-size:12px;color:var(--ink2);line-height:2;padding:12px 14px;'+
   'background:var(--night2);border:1px solid var(--edge);border-radius:4px">'+
   'p_in_retry <span style="color:var(--hot)">0.90</span><br>'+
@@ -302,6 +360,33 @@ function pageWindow(){
   'window opens</b>, derived from what the failure actually is. The test suite fails the build if a '+
   'failure-class name ever appears in that file.</p></div>'+
   '</div>';
+}
+
+function mountWindow(){
+  const redraw=function(){
+    const v=windowViz();
+    document.getElementById("wviz").innerHTML=v.svg;
+    document.getElementById("wread").innerHTML=winReadout(v);
+    document.getElementById("wnote").innerHTML=winNote(v);
+  };
+  document.getElementById("wslide").oninput=function(e){winT=+e.target.value;redraw()};
+  document.querySelectorAll('.chip[data-s]').forEach(function(b){
+    b.onclick=function(){
+      winS=+b.dataset.s;
+      winT=Math.min(1.5,SCEN[winS].blocked/2);
+      document.querySelectorAll('.chip[data-s]').forEach(function(o){
+        const on=+o.dataset.s===winS;
+        o.setAttribute("aria-pressed",String(on));
+        o.style.color=on?"var(--flame)":"";
+      });
+      const sc=SCEN[winS];
+      document.getElementById("wblurb").innerHTML=sc.blurb+' Most systems would <b style="color:var(--ember)">'+
+        sc.instinct.toLowerCase()+'</b>. Drag to see what that actually costs.';
+      const sl=document.getElementById("wslide");
+      sl.max=String(sc.span); sl.value=String(winT);
+      redraw();
+    };
+  });
 }
 
 /* ============================ PAGE 3 — REPLAY ============================ */
@@ -699,22 +784,6 @@ function route(){
   if(page==="window")mountWindow();
   if(page==="advisor")mountAdvisor();
   window.scrollTo({top:0,behavior:"instant"});
-}
-function mountWindow(){
-  const sl=document.getElementById("wslide");
-  sl.oninput=e=>{winT=+e.target.value;
-    const v=windowViz();
-    document.getElementById("wviz").innerHTML=v.svg;
-    const box=sl.nextElementSibling;
-    box.innerHTML='retry at <b style="color:var(--ink)">day '+(winT/24).toFixed(1)+'</b> → success '+
-      '<b style="color:'+(v.inside?"var(--hot)":"var(--ember)")+'">'+pct1(v.p)+'</b>';
-    document.querySelector(".flag").innerHTML=v.inside
-      ? '<b>Inside the window.</b> But you still lose value to attrition: waiting '+(winT/24).toFixed(1)+
-        ' days costs '+pct1(1-Math.exp(-0.10*(winT/24)))+' of what an instant recovery would have been worth. '+
-        'Being right late is worth far less than being right early.'
-      : '<b>Too early.</b> The account is still empty, so this attempt is near-worthless — and it is not free: '+
-        'it costs a gateway attempt and, on some rails, a worse risk score.';
-  };
 }
 function mountReplay(){
   const C=document.getElementById("cv");
