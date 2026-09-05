@@ -29,6 +29,9 @@ Theoretical ceiling (a perfect oracle that knows every hidden window): **71.57%*
 the honest headline, and it is smaller than it would have been if the control were weaker. Read
 the [Controls](#the-controls-are-deliberately-strong) section for why that is the point.
 
+**That advantage is not robust.** A ±40% sweep over every world constant finds it holds in
+17 of 21 scenarios and *inverts* in four — see [Sensitivity](#sensitivity-does-the-ranking-survive-our-assumptions-being-wrong).
+
 **It does not win outright.** `llm_recommended` recovers more on *fewer* gateway attempts
 (428 vs 546), but it gets there partly by contacting 25 more customers — and on
 recovered-per-customer-touched it is **less than half as efficient** as the rules arm
@@ -322,6 +325,47 @@ _35 rules, generated from `config/rules.toml` (sha256 `a74575c07bfd`). Do not ed
 
 ---
 
+## Sensitivity: does the ranking survive our assumptions being wrong?
+
+The obvious objection to this benchmark is that its six world constants are invented. That is
+fair — `p_in_retry = 0.90` is an informed estimate, not a measurement. The submission does not
+claim those numbers are right; it claims the **ranking** is a real finding. `scripts/sensitivity.py`
+tests that claim directly by perturbing every constant by ±40%, one at a time and jointly, and
+re-running all six arms.
+
+```
+python -m scripts.sensitivity --joint 8
+```
+
+**Result: one claim holds, one does not.**
+
+| Claim | Holds in |
+|---|---|
+| `max_wait_probe` never wins — waiting is not a substitute for reasoning | **21 / 21** |
+| `llm_recommended` beats `rules_recommended` | **17 / 21** |
+
+The degeneracy guarantee is solid under every perturbation tested. The LLM's advantage is not.
+It inverts in four scenarios:
+
+| Scenario | LLM | Rules | Delta | Winner |
+|---|---:|---:|---:|---|
+| `p_in_retry` −40% | ₹242,335 | ₹262,640 | **−₹20,305** | `payday_inference` |
+| joint #3 | ₹243,247 | ₹266,124 | **−₹22,877** | `payday_inference` |
+| joint #2 | ₹312,138 | ₹312,854 | −₹716 | `payday_inference` |
+| `p_in_contact` −40% | ₹279,038 | ₹279,273 | −₹235 | `rules_recommended` |
+
+Two of those are effectively ties. The two that are not share a cause: **when the retry channel
+is materially weaker than assumed, the ordering flips and the payday arm wins.** The LLM arm
+routes more payments to rail and contact, which is the right call under the baseline constants
+and the wrong one when retry is cheap relative to them.
+
+The honest reading: **+2.01pp is a result conditional on the world model, not a robust finding.**
+A panel is entitled to weight it accordingly, and this section exists so they can. What *is*
+robust is the shape of the benchmark — the probe never wins, and the ordering of the four
+non-LLM arms is stable throughout.
+
+---
+
 ## A negative result worth keeping
 
 `payday_inference` was built to close the largest remaining gap: `INSUFFICIENT_FUNDS` is
@@ -374,19 +418,22 @@ model is not a rubber stamp.
    assigns each of the 110 codes to a semantic family. The families carry the reasoning and are
    reviewable, but a payments engineer could reasonably disagree with individual rows.
 
-4. **`payday_inference` underperforms and is retained anyway** — see the section above. It is
+4. **The headline LLM gain inverts under 4 of 21 perturbations** — see the sensitivity
+   section. It is conditional on the world model being roughly right about the retry channel.
+
+5. **`payday_inference` underperforms and is retained anyway** — see the section above. It is
    reported as a negative result, not quietly dropped.
 
-5. **The LLM's +2.01pp is within the range that corpus choices could move.** It is one seed and
+6. **The LLM's +2.01pp is within the range that corpus choices could move.** It is one seed and
    one corpus. A sensitivity sweep over the world constants (±40%) was planned and **not built**.
 
-6. **The LLM arm is less contact-efficient** than the rules arm (₹7,052 vs ₹16,819 per customer
+7. **The LLM arm is less contact-efficient** than the rules arm (₹7,052 vs ₹16,819 per customer
    touched). It buys part of its gain by bothering more people.
 
-7. **`n=300`, one seed.** Per-class figures on small buckets (`MANDATE_FAILURE` n=10) carry large
+8. **`n=300`, one seed.** Per-class figures on small buckets (`MANDATE_FAILURE` n=10) carry large
    variance and should not be read as precise.
 
-8. **Per-class comparison between the two top arms is not meaningful**, because the LLM
+9. **Per-class comparison between the two top arms is not meaningful**, because the LLM
    *reclassifies* payments — the class buckets themselves differ between arms. Only the totals
    compare cleanly.
 
@@ -404,11 +451,11 @@ model is not a rubber stamp.
 | `data/llm_cache/` | 51 committed verdicts, keyed by prompt hash |
 | `scripts/selfcheck.py` | 71 assertions incl. L1–L13 |
 | `scripts/leakcheck.py` | the adversarial leak assertions |
+| `scripts/sensitivity.py` | ±40% sweep over the world constants |
 
 ---
 
 ## Not built
 
 - `RazorpayExecutor` / real API calls — explicitly out of scope.
-- Sensitivity sweep over `config/world.toml` (±40% on every constant).
 - Dashboard / frontend.
