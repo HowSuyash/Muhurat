@@ -24,7 +24,10 @@ from app.diagnosis.classifier import RulesClassifier
 from app.settings import get_settings
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-SUMMARY_PATH = Path(__file__).resolve().parents[1] / "data" / "runs" / "summary.json"
+RUNS_DIR = Path(__file__).resolve().parents[1] / "data" / "runs"
+SUMMARY_PATH = RUNS_DIR / "summary.json"
+EXPLORER_PATH = RUNS_DIR / "explorer.json"
+REPLAY_PATH = RUNS_DIR / "replay.json"
 
 app = FastAPI(
     title="Muhurat",
@@ -53,6 +56,35 @@ def summary() -> JSONResponse:
     return JSONResponse(json.loads(SUMMARY_PATH.read_text(encoding="utf-8")))
 
 
+@app.get("/api/explorer")
+def explorer() -> JSONResponse:
+    """Per-payment detail: what every arm did, and where the window actually was.
+
+    Produced by scripts/export_explorer.py after a run. Like the summary, it is a
+    post-hoc view -- no policy sees any of this at decision time.
+    """
+    if not EXPLORER_PATH.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "No explorer data yet. Run: python -m scripts.run_baseline && "
+                "python -m scripts.evaluate && python -m scripts.export_explorer"
+            ),
+        )
+    return JSONResponse(json.loads(EXPLORER_PATH.read_text(encoding="utf-8")))
+
+
+@app.get("/api/replay")
+def replay() -> JSONResponse:
+    """Compact event stream the dashboard replays: attempts, recoveries, windows."""
+    if not REPLAY_PATH.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="No replay data yet. Run: python -m scripts.export_replay",
+        )
+    return JSONResponse(json.loads(REPLAY_PATH.read_text(encoding="utf-8")))
+
+
 @app.get("/health")
 def health() -> dict:
     settings = get_settings()
@@ -64,4 +96,6 @@ def health() -> dict:
         "rules_loaded": len(classifier.table),
         "classifier_version": classifier.version,
         "results_available": SUMMARY_PATH.exists(),
+        "explorer_available": EXPLORER_PATH.exists(),
+        "replay_available": REPLAY_PATH.exists(),
     }
