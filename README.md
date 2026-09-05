@@ -228,9 +228,13 @@ python -m scripts.selfcheck
 
 If `Activate.ps1` is blocked: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned`
 
-**No API key is needed.** The LLM cache is committed, so the benchmark is fully offline. To
-regenerate it live: set `ANTHROPIC_API_KEY` and run
-`python -m scripts.build_llm_cache --api` (51 calls, one time).
+**No API key is needed, by design.** The LLM cache is committed, so the whole benchmark —
+including the LLM arm — runs offline, deterministically, at zero cost. A reviewer can reproduce
+every number in this README without an Anthropic account.
+
+If you *do* have a key and want to verify the cache against a live model:
+`python -m scripts.build_llm_cache --api` (51 calls, ~$0.15–0.40, one time), then re-run the
+benchmark. The entries are keyed by prompt hash, so the comparison is direct.
 
 The measurement pipeline is **pure stdlib** — `requirements.txt` is needed only for the FastAPI
 stub, the settings module, and live API regeneration.
@@ -406,13 +410,20 @@ model is not a rubber stamp.
 1. **The executor is simulated. No real Razorpay API call is made.** `RazorpayExecutor` was
    explicitly out of scope. Every rupee here is modelled, not settled.
 
-2. **The LLM cache was not produced by live API calls.** No Anthropic credential was available
-   before the deadline, so the 51 verdicts were produced by `claude-opus-5` reasoning over
-   Razorpay's published descriptions in an interactive session. Every cache entry records this in
-   its `_provenance` field. **Worse, that session also authored `config/world.toml`**, so these
-   verdicts are not a blind test — the classifier and the world model share an author. A live
-   `--api` run from a clean context is the only way to remove that conflict, and it is one
-   command away.
+2. **The LLM cache was not produced by live API calls — this is the biggest caveat in the
+   project.** The 51 verdicts were produced by `claude-opus-5` reasoning over Razorpay's
+   published descriptions in an interactive session, not through this repo's API path. Every
+   cache entry records that in its `_provenance` field.
+
+   **The same session also authored `config/world.toml`.** So the classifier and the world model
+   share an author, and these verdicts are *not* a blind test. The +2.01pp should be read as an
+   upper bound on what a live model would deliver, not an estimate of it. `scripts/build_llm_cache.py --api`
+   regenerates the cache from a clean context and is the only way to settle it; it was not run
+   because no API credential was available.
+
+   What this does **not** affect: the window executor, the leak assertions, the controls, the
+   degeneracy probe, and the sensitivity sweep are all independent of the cache. The four non-LLM
+   arms and their ordering stand on their own.
 
 3. **The window semantics are informed estimates, not measured data.** `config/world.toml`
    assigns each of the 110 codes to a semantic family. The families carry the reasoning and are
