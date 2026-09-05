@@ -625,7 +625,25 @@ function adviceCard(a){
    '<p class="sub mono" style="font-size:11.5px;margin:0">'+esc(a.diagnosis_note)+'</p></div></div>';
 }
 
+let REASONS_RULES=[], REASONS_LLM=[];
+function buildReasonLists(){
+  const adv=(D&&D.advice)||{};
+  REASONS_RULES=[];REASONS_LLM=[];
+  Object.keys(adv).sort().forEach(function(r){
+    (adv[r].rule_id?REASONS_RULES:REASONS_LLM).push(r);
+  });
+  if(!adv[ADV_REASON])ADV_REASON=REASONS_RULES[0]||REASONS_LLM[0]||"";
+}
+function reasonOptions(){
+  const opt=function(r){return '<option value="'+esc(r)+'"'+(r===ADV_REASON?" selected":"")+'>'+esc(r)+'</option>'};
+  return '<optgroup label="Covered by the rules table ('+REASONS_RULES.length+')">'+
+    REASONS_RULES.map(opt).join("")+'</optgroup>'+
+    '<optgroup label="Unmapped — answered by the model ('+REASONS_LLM.length+')">'+
+    REASONS_LLM.map(opt).join("")+'</optgroup>';
+}
+
 function pageAdvisor(){
+  buildReasonLists();
   return '<div class="eyebrow">Advisor</div>'+
   '<h1>A payment just failed. <em>Now what?</em></h1>'+
   '<p class="lede">Give it the error code and it returns a decision: what went wrong, whether it can be '+
@@ -633,23 +651,23 @@ function pageAdvisor(){
   'policy with a front door on it — it sees only what the benchmark let it see.</p>'+
   '<div class="panel"><h2>The failed payment</h2>'+
   '<div class="transport" style="margin-top:0">'+
-  '<input id="areason" list="rlist" value="'+esc(ADV_REASON)+'" placeholder="e.g. insufficient_funds" '+
-  'style="flex:1;min-width:240px;font-family:IBM Plex Mono,monospace;font-size:13px;padding:8px 11px;'+
-  'border:1px solid var(--edge2);border-radius:3px;background:var(--night2);color:var(--ink)">'+
-  '<datalist id="rlist">'+ALL_REASONS.map(function(r){return '<option value="'+esc(r)+'">'}).join("")+'</datalist>'+
+  '<label class="mono" style="font-size:11px;color:var(--ink3)">error code</label>'+
+  '<select id="areason" style="flex:1;min-width:260px;font-family:IBM Plex Mono,monospace;font-size:13px;'+
+  'padding:8px 11px;border:1px solid var(--edge2);border-radius:3px;background:var(--night2);color:var(--ink)">'+
+  reasonOptions()+'</select>'+
   '<label class="mono" style="font-size:11px;color:var(--ink3)">prior failures</label>'+
-  '<select id="aprior" style="font-family:IBM Plex Mono,monospace;font-size:12px;padding:7px 9px;'+
+  '<select id="aprior" style="font-family:IBM Plex Mono,monospace;font-size:12px;padding:8px 9px;'+
   'border:1px solid var(--edge2);border-radius:3px;background:var(--night2);color:var(--ink)">'+
   [0,1,2,3].map(function(n){return '<option value="'+n+'"'+(n===ADV_PRIOR?" selected":"")+'>'+n+'</option>'}).join("")+'</select>'+
-  '<button id="aask" class="pri">Advise</button></div>'+
-  '<p class="hint">'+ALL_REASONS.length+' common codes in the picker · any of Razorpay’s 110 published '+
-  'reasons works · codes outside the rules table are answered by the model</p></div>'+
+  '</div>'+
+  '<p class="hint">All '+(REASONS_RULES.length+REASONS_LLM.length)+' published Razorpay reasons · '+
+  REASONS_RULES.length+' answered by the rules table, '+REASONS_LLM.length+' by the model</p></div>'+
   '<div id="aout">'+adviceCard(ADV)+'</div>';
 }
 
 function mountAdvisor(){
   const go=function(){
-    const r=document.getElementById("areason").value.trim();
+    const r=document.getElementById("areason").value;
     ADV_PRIOR=+document.getElementById("aprior").value;
     if(!r)return;
     ADV_REASON=r;
@@ -660,10 +678,9 @@ function mountAdvisor(){
       .catch(function(e){document.getElementById("aout").innerHTML=
         '<div class="panel"><p class="sub">Could not get advice ('+esc(e.message)+').</p></div>'});
   };
-  document.getElementById("aask").onclick=go;
-  document.getElementById("areason").onkeydown=function(e){if(e.key==="Enter")go()};
+  document.getElementById("areason").onchange=go;
   document.getElementById("aprior").onchange=go;
-  if(!ADV)go();
+  if(!ADV||ADV.reason!==ADV_REASON)go();
 }
 
 /* ============================ ROUTER ============================ */
