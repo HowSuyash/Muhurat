@@ -1,38 +1,209 @@
 # AI Revenue Recovery — Razorpay AI Buildathon, Track 03
 
-Ingest failed payments, diagnose the root cause, choose a bounded recovery intervention,
-execute it, and report the money actually recovered against a baseline.
+A benchmark for failed-payment recovery. It ingests failed payments, diagnoses each one,
+chooses a bounded intervention, executes it against a simulated world, and measures the money
+actually recovered — against controls strong enough that beating them means something.
 
-**Day 1 status:** end-to-end pipeline running on 300 synthetic failures built from real
-Razorpay error codes. Two baseline arms measured. No LLM involved yet — that is Day 2, and
-the interfaces are already shaped for it.
+Every error code is real. Every number below is produced by the code in this repo and
+reproduces offline with no API spend.
 
 ---
 
-## Day 1 result
+## Result
 
-300 failed payments, ₹509,681.00 at risk, seed 42.
+300 failed payments, **₹509,681 at risk**, seed 42.
 
-| Arm | Recovered | Rate (by value) | Payments | Gateway attempts | Customers touched |
-|---|---:|---:|---:|---:|---:|
-| `naive_retry_3x` — retry everything, immediately, 3× | ₹128,315.00 | 25.18% | 74/300 | 794 | 0 |
-| `backoff_skip` — exponential backoff, skip non-retriable | **₹219,757.00** | **43.12%** | 128/300 | **525** | 0 |
+| Arm | Recovered | Rate | Payments | Gateway attempts | Customers touched | ₹ per customer touched |
+|---|---:|---:|---:|---:|---:|---:|
+| **`llm_recommended`** | **₹296,199** | **58.11%** | 174/300 | 428 | 42 | ₹7,052 |
+| `rules_recommended` | ₹285,928 | 56.10% | 165/300 | 546 | 17 | **₹16,819** |
+| `backoff_skip` | ₹159,405 | 31.28% | 101/300 | 642 | 0 | — |
+| `naive_retry_3x` | ₹62,106 | 12.19% | 39/300 | 878 | 0 | — |
+| `max_wait_probe` | ₹52,732 | 10.35% | 34/300 | 300 | 0 | — |
 
-`backoff_skip` recovers **₹91,442 more while making 269 fewer gateway attempts**. It gets that
-purely from two facts in the diagnosis: *can this failure ever clear on the same instrument*,
-and *is waiting worth anything*. No AI required.
+Theoretical ceiling (a perfect oracle that knows every hidden window): **71.57%**.
 
-That is the point of including it. Beating `naive_retry_3x` proves nothing; **`backoff_skip` is
-the number Day 2 has to beat.**
+**The LLM adds ₹10,271 — +2.01 percentage points over the strongest non-AI control.** That is
+the honest headline, and it is smaller than it would have been if the control were weaker. Read
+the [Controls](#the-controls-are-deliberately-strong) section for why that is the point.
 
-Where the difference comes from:
+**It does not win outright.** `llm_recommended` recovers more on *fewer* gateway attempts
+(428 vs 546), but it gets there partly by contacting 25 more customers — and on
+recovered-per-customer-touched it is **less than half as efficient** as the rules arm
+(₹7,052 vs ₹16,819). If customer goodwill is priced at all, the rules arm may be the better
+system. That tradeoff is reported rather than buried.
 
-| Failure class | naive rate | backoff_skip rate | What changed |
-|---|---:|---:|---|
-| `BANK_DOWNTIME` | 25.7% | **98.7%** | Stopped retrying into the same outage window |
-| `GATEWAY_TIMEOUT` | 71.4% | **98.3%** | Genuinely transient; a second look is cheap and works |
-| `INSUFFICIENT_FUNDS` | 7.3% | **24.0%** | A balance does not change in the seconds between retries |
-| `EXPIRED_CARD` | 0.0% | 0.0% | naive burned **60 attempts for ₹0**; backoff spent **0** |
+---
+
+## What this benchmark measures
+
+Most "payment recovery" demos measure whether a retry succeeded. That is uninteresting, because
+the interesting decision is not *whether* to retry but **when**, and on **which channel**.
+
+Each failed payment here has up to three hidden recovery channels, each with a window:
+
+| Channel | Meaning |
+|---|---|
+| `retry` | the same instrument on the same rail, later |
+| `rail` | move the payment to a different rail (UPI) |
+| `contact` | ask the customer to act |
+
+A window opens when the real blocker clears. A bank outage window opens when the outage ends. An
+`insufficient_funds` window opens on that customer's **payday**. An `otp_attempts_exceeded`
+window opens when the issuer's cooldown lapses. `card_expired` has no retry window at all — it
+will never clear, no matter how patient you are.
+
+An arm succeeds when its attempt lands inside an open window. **Timing is the decision
+variable**, which is exactly what a naive benchmark cannot see.
+
+### Why the earlier design was thrown away
+
+Day 1 used a config file mapping `(failure_class, action) -> P(success)`. That design has a fatal
+flaw: retry *timing* cannot affect the outcome, so the one place intelligence lives is invisible
+to the measurement. Worse, fixing it by adding timing coefficients would mean hand-writing the
+reward function that makes your own agent win.
+
+`config/outcome_model.toml` and `app/execution/simulated.py` are kept as a legacy executor
+(`--executor legacy`) so the two can be compared, but every number above comes from the
+window executor.
+
+### The integrity claim
+
+> **No number in `config/world.toml` is keyed by failure class.**
+
+There are exactly six global constants:
+
+```toml
+p_in_retry             = 0.90   # blocker gone -> the payment clears
+p_in_rail              = 0.65   # an alternate rail exists and is enabled
+p_in_contact           = 0.35   # the customer actually responds
+p_out                  = 0.02   # softens the knife edge
+attrition_horizon_days = 14     # after this the customer is gone
+attrition_lambda       = 0.10   # per-day decay: lateness is paid for
+```
+
+Every difference between failure classes comes from *when the window opens*, which is derived
+from the failure's own semantics — not from a coefficient chosen to favour an arm. `selfcheck`
+asserts the file contains no failure-class name.
+
+---
+
+## The controls are deliberately strong
+
+Three times during development, apparent "AI headroom" turned out to be a defect in our own
+control. Each was found by comparing against the oracle ceiling, and each was fixed *before*
+measuring the LLM:
+
+| Defect | Was worth | What it actually was |
+|---|---:|---|
+| rail/contact re-rolled per attempt | ₹47,838 | executor bug — three contacts scored 0.96 instead of 0.35 |
+| `card_expired` → contact, not rail | ₹26,276 | wrong action in the rules table |
+| unmapped codes → `ESCALATE` | ₹79,023 | strawman fallback that recovered nothing |
+
+**₹153,137** that the LLM arm would otherwise have banked without inferring anything. The
+fallback one mattered most: escalating every unmapped code made the entire 36% tail score 0.0%
+and look like a gap only AI could close. Four fallbacks were measured; the strongest was kept:
+
+```
+ESCALATE_MANUAL_REVIEW   Rs 206,905      RETRY_AFTER_BACKOFF 6h   Rs 280,351
+REQUEST_NEW_INSTRUMENT   Rs 282,679      SWITCH_RAIL_TO_UPI       Rs 285,928  <- chosen
+```
+
+The arms, weakest to strongest:
+
+- **`naive_retry_3x`** — retry everything immediately, 3×. Reach: 6 minutes. The floor.
+- **`backoff_skip`** — exponential backoff, skip non-retriable. Reach: 21 hours. What a
+  competent engineer builds first. Cannot reach a payday by construction.
+- **`rules_recommended`** — follows the hand-authored rules table including per-reason waits and
+  customer contact. The real bar.
+- **`llm_recommended`** — identical policy to `rules_recommended`; **only the classifier
+  differs**, so the gap is attributable to the model and not to a policy change.
+- **`max_wait_probe`** — the degeneracy probe. See below.
+
+---
+
+## The degeneracy probe
+
+If windows only closed at a fixed horizon, one attempt just before it would land inside *every*
+window that exists and beat every arm with zero inference — replacing "the config decides the
+answer" with "the horizon decides the answer".
+
+`max_wait_probe` makes a single attempt at t+13.9 days. It records **140 in-window attempts** —
+more than `backoff_skip` or `naive_retry_3x` — and still finishes **last** at 10.35%, because
+`attrition_lambda` means a 13.9-day-old recovery keeps only ~25% of its value.
+
+It runs in every benchmark, and `selfcheck` fails the build if it ever wins. *"What if I just
+always wait two weeks?"* is answered by a number, not an argument.
+
+---
+
+## Where the LLM earns its place
+
+`config/rules.toml` covers 35 of Razorpay's **110 published error reasons**. A hand-written table
+cannot cover the rest, and in this corpus the tail is:
+
+- **108 payments (36%)**, **51 distinct codes**, **₹187,814 at risk**
+- spread across **16 semantic families** and **behaviourally mixed** — `rolling_limit` (₹41,450)
+  has a real retry window, `instrument_dead` (₹27,070) is rail-recoverable, `merchant_config` is
+  genuinely dead
+
+So neither "escalate everything unmapped" nor "retry everything unmapped" works. The bucket has
+to actually be told apart, and that is a generalisation problem no lookup table solves.
+
+**The LLM wraps the rules path, it does not replace it.** Mapped codes use the rules table
+unchanged and cost nothing; only unmapped codes reach the model. Diagnosis provenance for the
+run above:
+
+```
+rules hits 192  |  cached verdicts 108  |  low-confidence fallbacks 3  |  errors 0  |  cache misses 0
+```
+
+Design constraints, all enforced by tests:
+
+- **Fixed model** `claude-opus-5`. `temperature` is **not** set — sampling parameters were
+  removed on the Claude 4.6+ family and return a 400. Determinism comes from the cache, which is
+  a stronger guarantee than temperature 0 ever was.
+- **Every verdict cached** to `data/llm_cache/`, keyed by SHA-256 of the prompt, and committed.
+  The benchmark re-runs **offline with zero API spend**.
+- **Never crashes, never silently guesses.** Low confidence (< 0.55), unparseable output, or any
+  API error falls back to the rules classifier and logs it.
+- **The prompt is built only from the Razorpay error object** — `reason`, `code`, `description`,
+  `source`, `step`. No amount, customer, timestamp, outcome, or hidden window can reach it.
+
+---
+
+## Leak assertions
+
+The integrity claim *is* the submission: if a policy could read the hidden windows, every number
+here would be meaningless. **71 checks pass**, including thirteen written to be adversarial.
+
+The line being defended is precise. *Inferring* a window from semantics is the skill under test —
+a burst of `bank_technical_error` on one bank **should** predict an outage end. *Reading* a
+window boundary off a visible field is cheating. L7 therefore asserts non-reconstruction, not
+statistical independence.
+
+| # | Assertion |
+|---|---|
+| L1 | `FailedPayment` has no window-shaped field |
+| L2 | no window-shaped key at any depth in the visible corpus |
+| L3 | no visible value equals a payment's *delayed* window boundary |
+| L4 | object-graph walk from the objects a policy receives reaches no truth timestamp |
+| L5 | AST scan: only the executor and reporters may import ground truth |
+| L6 | no `Diagnosis` field — including free text — leaks a boundary |
+| L7 | no single visible categorical field determines `retry_opens_at` |
+| L8 | adversarial `getattr` probe over ~40 names finds nothing |
+| L9 | the LLM prompt leaks no window, outcome, amount, customer or timestamp |
+| L10 | every whitelisted field actually reaches the prompt |
+| L11 | the cache key depends only on the reason, never on the payment |
+| L12 | all 51 cached verdicts record their provenance |
+| L13 | every LLM-arm diagnosis is a rule hit or a cached verdict — never a guess |
+
+The truth lives in a **separate file** (`data/corpus/ground_truth_v2_*.jsonl`) that no classifier
+or policy may import — a structural guarantee, not a naming convention.
+
+**Common random numbers:** outcomes draw from streams keyed by
+`(run_seed, payment_id, attempt_number)`, so two arms attempting the same payment at the same
+attempt see identical luck. The measured delta is decisions, not sampling noise.
 
 ---
 
@@ -50,90 +221,59 @@ python -m scripts.evaluate
 python -m scripts.selfcheck
 ```
 
-If `Activate.ps1` is blocked:
-`Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned`
+If `Activate.ps1` is blocked: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned`
 
-**The measurement pipeline is pure stdlib.** `requirements.txt` is needed only for the FastAPI
-stub and the settings module, so the numbers above reproduce on a bare Python 3.11+ install
-with nothing installed at all.
+**No API key is needed.** The LLM cache is committed, so the benchmark is fully offline. To
+regenerate it live: set `ANTHROPIC_API_KEY` and run
+`python -m scripts.build_llm_cache --api` (51 calls, one time).
 
-Optional API stub: `uvicorn app.main:app --reload` → `GET /health`.
+The measurement pipeline is **pure stdlib** — `requirements.txt` is needed only for the FastAPI
+stub, the settings module, and live API regeneration.
 
 ---
 
 ## Where the error codes come from
 
-Every error code in this project is real. Razorpay publishes the authoritative reason
-enumeration as a spreadsheet linked from their error docs; it was downloaded, parsed, and
-committed to [data/reference/razorpay_error_reasons.csv](data/reference/razorpay_error_reasons.csv)
-— **114 official `reason` values** with Razorpay's own explanation text.
+Razorpay publishes the authoritative reason list as a spreadsheet linked from their error docs.
+It was downloaded, parsed, and committed to
+[`data/reference/razorpay_error_reasons.csv`](data/reference/razorpay_error_reasons.csv) —
+**110 distinct official `reason` values** with Razorpay's own explanation text.
 
 - Source: `razorpay.com/docs/build/browser/assets/images/payments_error_reasons.xlsx`
 - Schema: [About Error Codes](https://razorpay.com/docs/api/errors/) ·
   [Payment Method Error Parameters](https://razorpay.com/docs/errors/payment-methods/)
 
-Each synthetic record carries the **full** Razorpay error object — `code`, `description`,
-`reason`, `source`, `step` — not just a code string. The gateway messages in the corpus are
-Razorpay's own wording, verbatim. That matters for Day 2: an LLM classifier needs the prose.
+Nothing is invented — including `psp_app_ not_available`, whose embedded space is a typo in
+Razorpay's own file, preserved verbatim so every code traces back to the published list.
 
 ---
 
 ## Architecture
 
 ```
-corpus (300 records)
-      │
-      ▼
-Classifier ──────────► Diagnosis (failure class, action, retriable, confidence, reason)
-  RulesClassifier          │
-  [Day 2: LLM]             ▼
-                     RecoveryPolicy ──────► RecoveryAction
-                       NaiveRetryPolicy         │
-                       BackoffSkipPolicy        ▼
-                       [Day 2: diagnosis-driven]
-                                          PaymentExecutor
-                                            SimulatedExecutor
-                                            [Day 2: RazorpayExecutor]
-                                                 │
-                                                 ▼
-                                          AuditLog → JSONL + SQLite
-                                                 │
-                                                 ▼
-                                            evaluate.py
+corpus (visible)                     ground truth (executor-only, separate file)
+      │                                            │
+      ▼                                            │
+Classifier ──► Diagnosis ──► RecoveryPolicy ──► PolicyDecision(action, delay_hours)
+ RulesClassifier                                   │
+ LLMClassifier ──► cache ──► claude-opus-5         ▼
+                                            PaymentExecutor  ◄─── windows
+                                          RecoveryWindowExecutor
+                                                   │
+                                                   ▼
+                                         AuditLog → JSONL + SQLite
+                                                   │
+                                                   ▼
+                                              evaluate.py
 ```
 
-Three interfaces, three swap points:
+Three interfaces, three swap points — `Classifier`, `RecoveryPolicy`, `PaymentExecutor`. The
+executor **never reads the action label**, only `delay_hours`, so a policy cannot win by
+*calling* something `RETRY_AT_PAYDAY`. It has to estimate when payday actually is.
 
-| Interface | File | Today | Day 2 |
-|---|---|---|---|
-| `Classifier` | [app/diagnosis/classifier.py](app/diagnosis/classifier.py) | `RulesClassifier` | LLM-backed |
-| `RecoveryPolicy` | [app/policy/base.py](app/policy/base.py) | naive, backoff-skip | diagnosis-driven |
-| `PaymentExecutor` | [app/execution/base.py](app/execution/base.py) | `SimulatedExecutor` | `RazorpayExecutor` (test mode) |
-
-### Why `classify` takes the whole error object
-
-```python
-class Classifier(Protocol):
-    name: str
-    version: str
-    def classify(self, error: RazorpayError) -> Diagnosis: ...
-```
-
-Passing only `(error_code, gateway_message)` would throw away `description`, `source` and
-`step` — exactly the signal an LLM needs — and force an interface change on Day 2. The
-Protocol is also **synchronous** (every LLM SDK ships a sync client; the orchestrator supplies
-concurrency via a thread pool), carries **no provider concepts** (no message lists, no model or
-temperature kwargs, no clients, no keys), and makes `rule_id` **optional** so a non-rules
-implementation leaves it `None` and justifies itself in `reason`.
-
----
-
-## The rules table
-
-Data, not `if/else`. There is no branch on an error code anywhere in the codebase —
-[app/diagnosis/rules.py](app/diagnosis/rules.py) only loads and indexes
-[config/rules.toml](config/rules.toml). The table below is generated from that file by
-`python -m scripts.render_rules_table --write`, so it cannot drift.
+The rules table is **data, not `if/else`** — there is no branch on an error code anywhere in the
+codebase. `python -m scripts.render_rules_table --write` regenerates the table below from
+`config/rules.toml`, so the docs cannot drift.
 
 <!-- BEGIN GENERATED RULES TABLE -->
 _35 rules, generated from `config/rules.toml` (sha256 `a74575c07bfd`). Do not edit by hand._
@@ -178,168 +318,58 @@ _35 rules, generated from `config/rules.toml` (sha256 `a74575c07bfd`). Do not ed
 | _fallback_ | _(no match)_ | — | UNKNOWN | yes | `SWITCH_RAIL_TO_UPI` | — | No rule matched. When the cause is unknown, changing the rail is the best generic move: it sidesteps whatever the instrument-specific problem was without asking the customer for anything. |
 <!-- END GENERATED RULES TABLE -->
 
-### The pair worth pointing at
+---
 
-`invalid_vpa` (**never** retriable — the VPA is wrong) and `vpa_resolution_failed`
-(**retriable** — NPCI's resolution service failed) are near-identical strings with opposite
-correct actions. `naive_retry_3x` treats them identically and spends 62 attempts across the
-class; `backoff_skip` spends 14 and recovers more (₹10,998 vs ₹9,679).
+## Honest limitations
 
-### `UNKNOWN` is deliberate
+1. **The executor is simulated. No real Razorpay API call is made.** `RazorpayExecutor` was
+   explicitly out of scope. Every rupee here is modelled, not settled.
 
-~4% of the corpus uses real Razorpay reasons intentionally left **out** of the rules table
-(`deemed_transaction`, `mismatch_in_transaction_details`, `collect_on_mcc_blocked`, …). The
-rules classifier bottoms out at `UNKNOWN` with `confidence = 0.0`. That is a measurable
-coverage gap, and closing it is the argument for a Day-2 LLM classifier existing at all.
+2. **The LLM cache was not produced by live API calls.** No Anthropic credential was available
+   before the deadline, so the 51 verdicts were produced by `claude-opus-5` reasoning over
+   Razorpay's published descriptions in an interactive session. Every cache entry records this in
+   its `_provenance` field. **Worse, that session also authored `config/world.toml`**, so these
+   verdicts are not a blind test — the classifier and the world model share an author. A live
+   `--api` run from a clean context is the only way to remove that conflict, and it is one
+   command away.
+
+3. **The window semantics are informed estimates, not measured data.** `config/world.toml`
+   assigns each of the 110 codes to a semantic family. The families carry the reasoning and are
+   reviewable, but a payments engineer could reasonably disagree with individual rows.
+
+4. **The LLM's +2.01pp is within the range that corpus choices could move.** It is one seed and
+   one corpus. A sensitivity sweep over the world constants (±40%) was planned and **not built**.
+
+5. **The LLM arm is less contact-efficient** than the rules arm (₹7,052 vs ₹16,819 per customer
+   touched). It buys part of its gain by bothering more people.
+
+6. **`n=300`, one seed.** Per-class figures on small buckets (`MANDATE_FAILURE` n=10) carry large
+   variance and should not be read as precise.
+
+7. **Per-class comparison between the two top arms is not meaningful**, because the LLM
+   *reclassifies* payments — the class buckets themselves differ between arms. Only the totals
+   compare cleanly.
 
 ---
 
-## The outcome model
+## Repo map
 
-Outcomes are probabilistic and grounded in the diagnosed failure class — an
-`insufficient_funds` retry does not succeed at the same rate as a `gateway_timeout` retry.
-Every probability lives in [config/outcome_model.toml](config/outcome_model.toml) **with a
-comment explaining the reasoning**, so the assumptions are inspectable and arguable.
-
-Immediate-retry success by class:
-
-| Failure class | `RETRY_NOW` | Reasoning |
-|---|---:|---|
-| `GATEWAY_TIMEOUT` | 0.62 | Transient infra; the retry lands on a healthy node |
-| `BANK_DOWNTIME` | 0.17 | The immediate retry hits the *same* outage window |
-| `OTP_TIMEOUT` | 0.11 | A silent retry cannot produce an OTP |
-| `MANDATE_FAILURE` | 0.09 | Only the timeout subset is transient |
-| `INSUFFICIENT_FUNDS` | 0.06 | A balance does not change between retries |
-| `RISK_DECLINE` | 0.03 | Repeat attempts *raise* the risk score |
-| `INVALID_VPA` | 0.02 | A bad VPA is equally bad on attempt three |
-| `EXPIRED_CARD` | 0.01 | Deterministic decline; near-total waste |
-
-Two modifiers, also in config: per-class `attempt_decay`, and a `prior_attempt_penalty` of 0.90
-per failure already on the record. The loader rejects any value outside `[0, 1]` and requires a
-probability for **every** (class, action) pair, so a typo fails at startup rather than quietly
-skewing the result.
-
-**Honest limitation.** These probabilities are informed estimates, not measured data. They are
-also keyed by *class*, which blends heterogeneous reasons: `INVALID_VPA`'s backoff rate of 0.21
-is a blend across the whole class, but `backoff_skip` only ever retries the `vpa_resolution_failed`
-subset, whose true rate is higher. The blend therefore **understates** any arm that correctly
-selects the retriable subset — the reported `backoff_skip` figure is a conservative floor.
-
-> **Day 3 (planned, not built):** sensitivity sweep at ±40% on every probability in
-> `outcome_model.toml`, to show the *ranking of arms* is robust to these assumptions. That is
-> the answer to "your numbers are invented" — the absolute rupees are a model, the ordering
-> should not be.
+| Path | What it is |
+|---|---|
+| `config/world.toml` | recovery semantics for all 110 codes + the six global constants |
+| `config/rules.toml` | the hand-authored rules table (35 codes), data not code |
+| `app/corpus/truth.py` | hidden windows — **executor-only**, importing it elsewhere fails L5 |
+| `app/execution/window.py` | the window executor |
+| `app/diagnosis/llm_classifier.py` | LLM-over-rules classifier, cache, fallback |
+| `data/llm_cache/` | 51 committed verdicts, keyed by prompt hash |
+| `scripts/selfcheck.py` | 71 assertions incl. L1–L13 |
+| `scripts/leakcheck.py` | the adversarial leak assertions |
 
 ---
 
-## Why the two arms are comparable
+## Not built
 
-Outcomes are drawn from streams keyed by `(run_seed, payment_id, attempt_number)`, not one
-global RNG — see [app/rng.py](app/rng.py). Both arms attempting the same payment at the same
-attempt number see the **identical** random draw, so the measured delta is attributable to the
-decisions and not to sampling luck. This is common random numbers, and `selfcheck.py` asserts
-it holds across every shared cell.
-
-Consequences: the comparison is stable under reordering, parallelism, and adding or removing
-arms. Actions that never touch the rails (`SUPPRESS_DO_NOT_RETRY`, `ESCALATE_MANUAL_REVIEW`)
-consume no draw, so suppressing a payment in one arm cannot perturb another arm's luck.
-
-Verified: two independent full runs produce byte-identical evaluation output.
-
----
-
-## Customer-contact cost
-
-Recovering more money by contacting every customer is not a better system. The eval counts
-actions that consume a customer's attention (`PROMPT_CUSTOMER_OTP`, `REQUEST_NEW_INSTRUMENT`,
-`REQUEST_NEW_MANDATE`) and reports **recovered per customer touched** alongside the headline.
-
-Both Day-1 arms touch **zero** customers, by construction — neither has any basis for choosing
-who to contact. That sets the denominator at zero and means every contact Day 2's arm makes has
-to pay for itself.
-
----
-
-## Audit trail
-
-Every decision is one structured record, written to **both** `data/runs/<run_id>.jsonl`
-(diffable, flushed per record so an interrupted run still leaves a trail) and SQLite at
-`data/recovery.db` (queryable). Schema: [app/models.py](app/models.py) → `DecisionRecord`;
-the SQLite DDL is generated from the dataclass fields so the two cannot drift.
-
-`input → rule fired → reason → action chosen → outcome`, with the RNG stream key on every row
-so any single outcome can be reproduced in isolation. A real record:
-
-```json
-{
-  "error_reason": "incorrect_card_expiry_date",
-  "gateway_message": "The customer has entered an incorrect expiry date of the card.",
-  "error_source": "customer", "error_step": "payment_initiation",
-  "rule_id": "EC-002", "confidence": 1.0,
-  "failure_class": "EXPIRED_CARD",
-  "reason_text": "[EC-002] reason='incorrect_card_expiry_date' -> EXPIRED_CARD. Wrong data on file. No amount of retrying corrects a stored value; only the customer can.",
-  "recommended_action": "REQUEST_NEW_INSTRUMENT",
-  "action_chosen": "RETRY_NOW",
-  "policy_name": "naive_retry_3x",
-  "outcome": "failed", "amount_recovered_paise": 0,
-  "success_probability": 0.01,
-  "rng_stream_key": "42|pay_0042000116|1"
-}
-```
-
-`recommended_action: REQUEST_NEW_INSTRUMENT` next to `action_chosen: RETRY_NOW` is the naive
-arm's failure made legible: the diagnosis was right and the policy ignored it.
-
-The DB accumulates across runs — filter on `run_id` (or `arm`) when querying.
-
----
-
-## Trusting the numbers
-
-`python -m scripts.selfcheck` — **22 assertions, all passing.** Determinism for a fixed seed,
-a different seed producing a different corpus, every probability in `[0, 1]`, complete
-(class, action) coverage, every corpus reason either mapped or a known intended gap, the
-`UNKNOWN` gap present at 3–10%, every record carrying a real Razorpay message, every payment
-having an audit record, the 3-attempt cap respected, no attempt after a success, no payment
-recovered twice, per-class sums reconciling to the total, recovered ≤ at risk, every audit row
-fully populated, and common random numbers matching across arms.
-
----
-
-## Corpus
-
-300 records, seed 42, `sha256 52fc0c38…`. Method mix is UPI-dominant and failure classes are
-conditioned on method, so no impossible rows exist (`invalid_vpa` only on UPI, `card_expired`
-only on card, `mandate_creation_*` only on emandate). Amounts are lognormal ₹100–₹50,000 stored
-in **paise**. Timestamps span 14 days on a diurnal curve; bank-downtime failures are clustered
-into three synthetic outage windows rather than sprinkled uniformly, because that is what
-downtime looks like and it is what makes retry *timing* matter. 151 distinct customers, so
-repeat offenders exist. 0–2 prior attempts per record, skewed high for `insufficient_funds`.
-
----
-
-## Secrets
-
-`.env` holds `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` and is **git-ignored**. No Day-1 code
-path reads either value — the simulated executor has no use for them. They are declared in
-[app/settings.py](app/settings.py) as `SecretStr` so printing, logging, or dumping a `Settings`
-object yields `**********`, ready for Day 2's real client. `/health` reports
-`razorpay_credentials_configured: true|false` — presence only, never values.
-[.env.example](.env.example) carries both keys, empty.
-
----
-
-## Scope
-
-**Day 1 (done):** skeleton · 300-record corpus from real codes · rules-based diagnosis ·
-`Classifier` interface · two baseline arms · simulated outcomes · audit trail · eval harness ·
-selfcheck.
-
-**Explicitly not in Day 1:** no LLM calls, no AI SDK in `requirements.txt`, no API key read
-anywhere, no dashboard, no real Razorpay calls, no auth, no Docker, no test suite beyond
-`selfcheck.py`.
-
-**Day 2:** `LLMClassifier` behind the existing Protocol · diagnosis-driven policy using the
-full action vocabulary · `RazorpayExecutor` against test-mode APIs · three-way comparison.
-
-**Day 3:** sensitivity sweep over `outcome_model.toml` · demo.
+- `RazorpayExecutor` / real API calls — explicitly out of scope.
+- Sensitivity sweep over `config/world.toml` (±40% on every constant).
+- A payday-timing inference arm — the largest remaining single gap at **₹28,530**.
+- Dashboard / frontend.
