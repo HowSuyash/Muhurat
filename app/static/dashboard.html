@@ -6,21 +6,21 @@
 <title>Muhurat</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500;600&display=swap">
 <style>
 /* A committed night scene: the ignition glow only reads on a dark ground, so
    every colour is painted explicitly rather than inherited from the host. */
 :root{
   color-scheme:dark;
   --night:#0c0a08;--night2:#141110;--panel:#17140f;--panel2:#1d1913;--edge:#2a251e;--edge2:#3a332a;
-  --ink:#f6f1e8;--ink2:#b9b1a3;--ink3:#7d766a;
+  --ink:#f7f3ec;--ink2:#c8c1b4;--ink3:#8c857a;
   --flame:#f5b13d;--hot:#ffd98a;--ember:#e0663a;
   --a1:#4a94ee;--a2:#e0663a;--a3:#22b183;--a4:#d55181;--a5:#9085e9;--a6:#e66767;--a7:#c98500;
   --dim:#3a342c;--good:#22b183;
 }
 *{box-sizing:border-box}
 html,body{background:var(--night)}
-body{margin:0;color:var(--ink);font:14.5px/1.6 "IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+body{margin:0;color:var(--ink);font:15.5px/1.65 "IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
   -webkit-font-smoothing:antialiased}
 .mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
 .wrap{max-width:1180px;margin:0 auto;padding:0 22px 70px}
@@ -30,10 +30,10 @@ body{margin:0;color:var(--ink);font:14.5px/1.6 "IBM Plex Sans",ui-sans-serif,sys
   border-bottom:1px solid var(--edge)}
 .topin{max-width:1180px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 .brand{display:flex;align-items:baseline;gap:9px;text-decoration:none;color:var(--ink)}
-.brand b{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:27px;line-height:1}
-.brand .deva{font-family:"Instrument Serif",Georgia,serif;font-size:15px;color:var(--flame);opacity:.9}
+.brand b{font-family:"Source Serif 4",Georgia,"Times New Roman",serif;font-weight:600;font-size:25px;line-height:1;letter-spacing:-.01em}
+.brand .deva{font-family:"Source Serif 4",Georgia,"Times New Roman",serif;font-size:15px;color:var(--flame);opacity:.9}
 nav{display:flex;gap:2px;flex-wrap:wrap;margin-left:auto}
-nav a{font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.04em;color:var(--ink3);
+nav a{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.03em;color:var(--ink3);
   text-decoration:none;padding:6px 12px;border-radius:3px;border:1px solid transparent;transition:.13s}
 nav a:hover{color:var(--ink2)}
 nav a[aria-current="page"]{color:var(--flame);border-color:var(--edge2);background:var(--night2)}
@@ -43,16 +43,16 @@ nav a:focus-visible,button:focus-visible,.chip:focus-visible,input:focus-visible
 /* ---- page furniture ---- */
 .page{padding-top:34px;animation:in .3s ease}
 @keyframes in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
-.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.16em;
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500;letter-spacing:.16em;
   text-transform:uppercase;color:var(--flame);margin-bottom:9px}
-h1{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:46px;margin:0 0 12px;
-  line-height:1.05;letter-spacing:.004em;text-wrap:balance;max-width:20ch}
+h1{font-family:"Source Serif 4",Georgia,"Times New Roman",serif;font-weight:600;font-size:44px;margin:0 0 14px;
+  line-height:1.12;letter-spacing:-.015em;text-wrap:balance;max-width:21ch}
 h1 em{font-style:italic;color:var(--flame)}
-.lede{color:var(--ink2);font-size:16.5px;max-width:64ch;margin:0 0 30px}
+.lede{color:var(--ink2);font-size:17.5px;line-height:1.6;max-width:62ch;margin:0 0 30px}
 .lede strong{color:var(--ink);font-weight:500}
-h2{font-size:11.5px;font-weight:600;margin:0 0 13px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2)}
+h2{font-size:12px;font-weight:600;margin:0 0 14px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink2)}
 p{max-width:70ch}
-.sub{color:var(--ink2);font-size:13.5px;max-width:74ch;margin:0 0 16px}
+.sub{color:var(--ink2);font-size:14.5px;line-height:1.6;max-width:72ch;margin:0 0 16px}
 
 .panel{background:var(--panel);border:1px solid var(--edge);border-radius:6px;padding:18px 20px;margin-bottom:16px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}
@@ -61,17 +61,17 @@ p{max-width:70ch}
 .strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:1px;
   background:var(--edge);border:1px solid var(--edge);border-radius:5px;overflow:hidden;margin-bottom:22px}
 .cell{background:var(--panel);padding:14px 16px}
-.cell .k{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.12em;
+.cell .k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.11em;
   text-transform:uppercase;color:var(--ink3)}
 .cell .v{font-size:27px;font-weight:600;letter-spacing:-.02em;margin-top:6px;font-variant-numeric:tabular-nums;line-height:1.1}
-.cell .n{font-size:11.5px;color:var(--ink3);margin-top:3px;font-family:"IBM Plex Mono",monospace}
+.cell .n{font-size:12px;color:var(--ink3);margin-top:3px;font-family:"IBM Plex Mono",monospace}
 .cell.f .v{color:var(--flame)}.cell.h .v{color:var(--hot)}.cell.e .v{color:var(--ember)}
 
 /* ---- replay stage ---- */
 .stage{background:linear-gradient(180deg,var(--night2),var(--panel));border:1px solid var(--edge);
   border-radius:6px;padding:18px 20px 14px;margin-bottom:16px}
 .readout{display:flex;flex-wrap:wrap;gap:10px 34px;align-items:flex-end;margin-bottom:14px}
-.ro .k{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+.ro .k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink3)}
 .ro .v{font-size:31px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
 .ro.day .v{color:var(--flame)}.ro.money .v{color:var(--hot)}
 .ro .s{font-size:11.5px;color:var(--ink3);font-family:"IBM Plex Mono",monospace}
@@ -92,14 +92,14 @@ input[type=range]{flex:1;min-width:170px;accent-color:var(--flame);background:tr
 .chip .dot{width:8px;height:8px;border-radius:99px;background:currentColor;flex:none}
 .chip[aria-pressed="true"]{color:var(--ink);border-color:currentColor}
 .chip.foc{box-shadow:inset 0 0 0 1px currentColor}
-.hint{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink3);margin-top:10px}
+.hint{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink3);margin-top:11px}
 
 /* ---- tables ---- */
-table{width:100%;border-collapse:collapse;font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
 th,td{text-align:right;padding:8px 11px;border-bottom:1px solid var(--edge);white-space:nowrap;
   font-variant-numeric:tabular-nums}
 th:first-child,td:first-child{text-align:left;font-variant-numeric:normal}
-th{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+th{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
   color:var(--ink3);font-weight:500}
 tbody tr:last-child td{border-bottom:none}
 td.nm{font-family:"IBM Plex Mono",monospace;font-size:12.5px}
@@ -109,18 +109,20 @@ td.nm i{display:inline-block;width:8px;height:8px;border-radius:99px;margin-righ
 
 /* ---- misc blocks ---- */
 .quote{border-left:2px solid var(--flame);padding:2px 0 2px 16px;margin:22px 0;
-  font-family:"Instrument Serif",Georgia,serif;font-style:italic;font-size:21px;color:var(--hot);max-width:44ch}
-.stepnum{font-family:"Instrument Serif",Georgia,serif;font-size:30px;color:var(--flame);line-height:1;opacity:.75}
+  font-family:"Source Serif 4",Georgia,"Times New Roman",serif;font-style:italic;font-weight:400;
+  font-size:22px;line-height:1.45;color:var(--hot);max-width:46ch}
+.stepnum{font-family:"IBM Plex Mono",monospace;font-size:15px;font-weight:600;color:var(--flame);
+  line-height:1.5;opacity:.85;min-width:20px}
 .step{display:flex;gap:16px;padding:14px 0;border-top:1px solid var(--edge)}
 .step:first-child{border-top:none}
-.step h3{margin:0 0 4px;font-size:15px;font-weight:600}
-.step p{margin:0;color:var(--ink2);font-size:13.5px}
-.ck{display:flex;gap:10px;align-items:baseline;font-size:12.5px;color:var(--ink2);padding:3px 0}
+.step h3{margin:0 0 4px;font-size:15.5px;font-weight:600;font-family:"IBM Plex Mono",monospace;letter-spacing:-.01em}
+.step p{margin:0;color:var(--ink2);font-size:14.5px}
+.ck{display:flex;gap:10px;align-items:baseline;font-size:13px;color:var(--ink2);padding:4px 0}
 .ck i{color:var(--good);font-style:normal;font-weight:700;font-size:11px}
 .ck code{color:var(--ink);font-family:"IBM Plex Mono",monospace;font-size:11.5px}
 .checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:0 26px}
 .flag{border:1px solid var(--edge2);border-left:3px solid var(--ember);background:var(--night2);
-  padding:13px 17px;border-radius:0 4px 4px 0;font-size:13.5px;color:var(--ink2);margin:14px 0}
+  padding:14px 18px;border-radius:0 4px 4px 0;font-size:14.5px;line-height:1.6;color:var(--ink2);margin:14px 0}
 .flag b{color:var(--ink)}
 .fixrow{display:flex;gap:14px;align-items:baseline;padding:11px 0;border-top:1px solid var(--edge)}
 .fixrow:first-child{border-top:none}
@@ -130,10 +132,10 @@ td.nm i{display:inline-block;width:8px;height:8px;border-radius:99px;margin-righ
 .fixrow .note{font-size:12px;color:var(--ink3);margin-top:2px}
 .kind{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;
   color:var(--ink3);border:1px solid var(--edge2);border-radius:99px;padding:1px 8px;white-space:nowrap}
-footer{color:var(--ink3);font-size:12px;max-width:76ch;margin-top:30px;padding-top:16px;border-top:1px solid var(--edge)}
+footer{color:var(--ink3);font-size:12.5px;line-height:1.65;max-width:76ch;margin-top:30px;padding-top:16px;border-top:1px solid var(--edge)}
 .err{padding:60px;text-align:center;color:var(--ink2)}
 @media(prefers-reduced-motion:reduce){.page{animation:none}}
-@media(max-width:620px){h1{font-size:33px}.ro .v{font-size:24px}nav{margin-left:0;width:100%}}
+@media(max-width:620px){h1{font-size:32px}.ro .v{font-size:24px}nav{margin-left:0;width:100%}}
 </style>
 </head>
 <body>
@@ -587,9 +589,9 @@ function sensTable(){
   const sc=D.sensitivity.scenarios;
   const wins=sc.filter(s=>s.llm_wins).length,probe=sc.filter(s=>s.probe_loses).length;
   return '<div style="display:flex;gap:26px;flex-wrap:wrap;margin-bottom:14px">'+
-   '<div><div class="k mono" style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)">Probe never wins</div>'+
+   '<div><div class="k mono" style="font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink3)">Probe never wins</div>'+
    '<div style="font-size:25px;font-weight:600;color:var(--good)">'+probe+' / '+sc.length+'</div></div>'+
-   '<div><div class="k mono" style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)">LLM beats rules</div>'+
+   '<div><div class="k mono" style="font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink3)">LLM beats rules</div>'+
    '<div style="font-size:25px;font-weight:600;color:var(--ember)">'+wins+' / '+sc.length+'</div></div></div>'+
    '<div class="scroll"><table><thead><tr><th>Scenario</th><th>llm</th><th>rules</th><th>Δ</th><th>Holds</th></tr></thead><tbody>'+
    sc.map(s=>{const d=s.scores.llm_recommended-s.scores.rules_recommended;
@@ -622,10 +624,10 @@ function pageIntegrity(){
   '<p class="sub">If windows only closed at a fixed horizon, one attempt just before it would land inside '+
   '<i>every</i> window and beat everything with zero inference.</p>'+
   '<div style="display:flex;gap:26px;flex-wrap:wrap;margin:14px 0">'+
-  '<div><div class="mono" style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)">In-window attempts</div>'+
+  '<div><div class="mono" style="font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink3)">In-window attempts</div>'+
   '<div style="font-size:25px;font-weight:600;color:var(--flame)">'+probe.timing.in+'</div>'+
   '<div class="mono" style="font-size:11px;color:var(--ink3)">more than most arms</div></div>'+
-  '<div><div class="mono" style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)">Final position</div>'+
+  '<div><div class="mono" style="font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink3)">Final position</div>'+
   '<div style="font-size:25px;font-weight:600;color:var(--ember)">last</div>'+
   '<div class="mono" style="font-size:11px;color:var(--ink3)">'+pct(probe.rate)+' recovered</div></div></div>'+
   '<p class="sub">It lands in more windows than almost anything else and still finishes last, because '+
@@ -661,7 +663,7 @@ function adviceCard(a){
   const when=a.retry_at?new Date(a.retry_at):null;
   return '<div class="panel" style="border-color:var(--edge2)">'+
    '<div style="display:flex;flex-wrap:wrap;gap:10px 20px;align-items:baseline;margin-bottom:6px">'+
-   '<div style="font-family:Instrument Serif,Georgia,serif;font-size:27px;color:var(--hot)">'+esc(a.verdict)+'</div>'+
+   '<div style="font-family:Source Serif 4,Georgia,serif;font-size:27px;color:var(--hot)">'+esc(a.verdict)+'</div>'+
    '<span class="kind" style="border-color:'+(llm?"var(--a1)":"var(--edge2)")+';color:'+(llm?"var(--a1)":"var(--ink3)")+'">'+
    esc(a.decided_by)+(a.rule_id?" · "+esc(a.rule_id):"")+'</span>'+
    '<span class="kind">'+esc(a.failure_class)+'</span>'+
@@ -684,7 +686,7 @@ function adviceCard(a){
    '<div><h2>For the merchant</h2>'+
    a.merchant_steps.map(function(x,i){return '<div class="step" style="padding:9px 0"><span class="stepnum" style="font-size:20px">'+
      (i+1)+'</span><div><p style="margin:0">'+esc(x)+'</p></div></div>'}).join("")+
-   '<div style="margin-top:14px"><div class="mono" style="font-size:9.5px;letter-spacing:.12em;'+
+   '<div style="margin-top:14px"><div class="mono" style="font-size:10.5px;letter-spacing:.11em;'+
    'text-transform:uppercase;color:var(--ember);margin-bottom:6px">Do not</div>'+
    a.avoid.map(function(x){return '<div class="ck" style="align-items:flex-start"><i style="color:var(--ember)">×</i>'+
      '<span>'+esc(x)+'</span></div>'}).join("")+'</div></div>'+
@@ -706,7 +708,7 @@ function adviceCard(a){
    '</div></div>'+
 
    '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--edge)">'+
-   '<div class="mono" style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:5px">Diagnosis trail</div>'+
+   '<div class="mono" style="font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink3);margin-bottom:5px">Diagnosis trail</div>'+
    '<p class="sub mono" style="font-size:11.5px;margin:0">'+esc(a.diagnosis_note)+'</p></div></div>';
 }
 
