@@ -21,6 +21,49 @@ reproduces offline with no API spend.
 
 ---
 
+## See it running
+
+**Live dashboard — nothing to install:**
+https://claude.ai/code/artifact/25dae778-c7f6-43e4-8aef-2a18a9704b10
+
+Six pages: the problem, the hidden-window mechanic (with a slider you can drag), a working
+**advisor**, a **replay** of fourteen days in twenty seconds, the seven policies, and the
+integrity evidence.
+
+Or run it yourself:
+
+```powershell
+uvicorn app.main:app        # → http://127.0.0.1:8000
+```
+
+### The advisor — the winning policy with a front door
+
+Give it any of Razorpay's 110 published error codes and it returns a decision: what went wrong,
+whether it can be recovered at all, **when** to retry, what your system should do, and what to
+say to the customer.
+
+| `insufficient_funds` | |
+|---|---|
+| Verdict | **Wait for the salary cycle** |
+| Action | `RETRY_AT_PAYDAY` · retry in ~3 days |
+| Contacts customer | no — silent recovery |
+| Do not | retry within minutes; the balance will not have moved |
+
+It reads **only what a policy sees during the benchmark** — the error object, the rules table,
+and the LLM for unmapped codes. It never touches `world.toml` or the ground truth, even though
+both sit in this repo. That restraint is what makes its advice testable: because it uses exactly
+what `llm_recommended` uses, the measured **58.11%** is the number this tool actually earns.
+
+`GET /api/advise?reason=insufficient_funds&prior_attempts=2` returns the same thing as JSON.
+
+### The replay — watch fourteen days pass
+
+`naive_retry_3x` spends everything in the first six minutes and then flatlines for a fortnight.
+`max_wait_probe` waits until day 13.9 and arrives to almost nothing. Each of the 300 payments is
+a lamp that ignites when it is recovered.
+
+---
+
 ## Result
 
 300 failed payments, **₹509,681 at risk**, seed 42.
@@ -485,8 +528,10 @@ model is not a rubber stamp.
 | `scripts/selfcheck.py` | 71 assertions incl. L1–L13 |
 | `scripts/leakcheck.py` | the adversarial leak assertions |
 | `scripts/sensitivity.py` | ±40% sweep over the world constants |
-| `app/static/dashboard.html` | the results dashboard |
-| `app/main.py` | FastAPI: dashboard, `/api/summary`, `/health` |
+| `app/advisor.py` | the advisor: decision, timing, merchant + customer guidance |
+| `app/static/dashboard.html` | the six-page dashboard |
+| `app/main.py` | FastAPI: dashboard, `/api/advise`, `/api/replay`, `/health` |
+| `scripts/export_replay.py` | flattens a finished run into a 109 KB event stream |
 
 ---
 
