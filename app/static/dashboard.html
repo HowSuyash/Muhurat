@@ -403,10 +403,21 @@ function draw(){
   const maxY=Math.max(D.ceiling,...Object.values(D.arms).map(a=>a.total))*1.04;
   const y=v=>LAY.padT+LAY.raceH-(v/maxY)*LAY.raceH;
   ctx.font='10px "IBM Plex Mono", monospace';ctx.textAlign="center";
-  for(let d=0;d<=14;d+=2){const px=x(d*24);
+  const totalDays=span/24, stepD=totalDays>24?5:(totalDays>12?2:1);
+  for(let d=0;d<=totalDays;d+=stepD){const px=x(d*24);
     ctx.strokeStyle="rgba(255,255,255,.05)";ctx.lineWidth=1;
     ctx.beginPath();ctx.moveTo(px,LAY.padT-6);ctx.lineTo(px,LAY.padT+LAY.raceH);ctx.stroke();
     ctx.fillStyle=CSS("--ink3");ctx.fillText("day "+d,px,LAY.padT+LAY.raceH+17);}
+  // Failures stop arriving well before the clock stops -- everything after this
+  // line is recovery work on payments that already failed.
+  const lastFail=Math.max.apply(null,D.payments.map(function(q){return q.t}));
+  const lfx=x(lastFail);
+  ctx.setLineDash([2,3]);ctx.strokeStyle="rgba(255,255,255,.16)";ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(lfx,LAY.padT-6);ctx.lineTo(lfx,LAY.padT+LAY.raceH);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.textAlign="left";ctx.fillStyle=CSS("--ink3");ctx.font='9.5px "IBM Plex Mono", monospace';
+  ctx.fillText("last failure arrives",lfx+6,LAY.padT+6);
+  ctx.font='10px "IBM Plex Mono", monospace';ctx.textAlign="center";
   ctx.textAlign="right";
   for(let i=0;i<=3;i++){const v=maxY/3*i;
     ctx.fillStyle=CSS("--ink3");ctx.fillText(lakh(v),LAY.padL-10,y(v)+3);
@@ -484,18 +495,20 @@ function syncBtn(){const b=document.getElementById("play");if(b)
   b.textContent=S.playing?"❚❚  Pause":(S.t>=D.span_h?"↻  Replay":"▶  Play")}
 function pageReplay(){
   return '<div class="eyebrow">The replay</div>'+
-  '<h1>Fourteen days in <em>twenty seconds</em>.</h1>'+
-  '<p class="lede">Watch each policy spend its attempts. <strong>naive_retry_3x</strong> fires everything in '+
-  'the first six minutes and then flatlines for a fortnight. <strong>max_wait_probe</strong> waits until '+
-  'day 13.9 and arrives to almost nothing left.</p>'+
+  '<h1>A month of recovery in <em>twenty seconds</em>.</h1>'+
+  '<p class="lede">Failures arrive over the first fourteen days. Each one then stays recoverable for up '+
+  'to fourteen days more, so the clock runs to day thirty-four. Watch each policy spend its attempts: '+
+  '<strong>naive_retry_3x</strong> fires everything in the first six minutes, then flatlines. '+
+  '<strong>max_wait_probe</strong> always waits until day 13.9 and arrives to almost nothing left.</p>'+
   '<div class="stage"><div class="readout">'+
-  '<div class="ro day"><div class="k">Elapsed</div><div class="v" id="day">d0.0</div><div class="s">of 14 days</div></div>'+
+  '<div class="ro day"><div class="k">Elapsed</div><div class="v" id="day">d0.0</div>'+
+  '<div class="s">of '+(D.span_h/24).toFixed(0)+' days</div></div>'+
   '<div class="ro money"><div class="k">Recovered by focus arm</div><div class="v" id="rec">₹0</div>'+
   '<div class="s" id="recs">—</div></div>'+
   '<div class="ro"><div class="k">Rate</div><div class="v" id="rate">0.00%</div>'+
   '<div class="s">of '+money(D.at_risk)+' at risk</div></div></div>'+
   '<canvas id="cv" width="'+LAY.w+'" height="'+LAY.h+'" role="img" '+
-  'aria-label="Fourteen days replayed: cumulative recovery per policy, and a lamp per payment lit when recovered"></canvas>'+
+  'aria-label="A month replayed: cumulative recovery per policy, and a lamp per payment lit when recovered"></canvas>'+
   '<div class="transport"><button id="play" class="pri">▶  Play</button>'+
   '<button id="restart">↻  Restart</button>'+
   '<input type="range" id="scrub" min="0" max="'+D.span_h+'" step="0.5" value="0" aria-label="Scrub through time">'+
