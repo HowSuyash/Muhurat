@@ -1,0 +1,11 @@
+# Only public/ is served. Keep the Python project out of the deployment so
+# Vercel does not try to detect or build it.
+app/
+scripts/
+config/
+data/
+.venv/
+*.py
+pyproject.toml
+requirements.txt
+*.pdf
