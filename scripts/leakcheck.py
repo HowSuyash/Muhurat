@@ -52,7 +52,17 @@ TRUTH_IMPORT_WHITELIST = {
     "scripts/evaluate.py",
     "scripts/selfcheck.py",
     "scripts/leakcheck.py",
+    # Harness: regenerates a corpus + truth to sweep attrition_horizon_days,
+    # which is baked into the windows at generation time. It runs arms but is
+    # never itself a classifier or a policy.
+    "scripts/sensitivity.py",
 }
+
+#: Directories that may NEVER be whitelisted, whatever the list above says.
+#: A policy or classifier reading ground truth is the one failure this whole
+#: project exists to rule out, so it is enforced structurally rather than by
+#: remembering to keep the whitelist honest.
+NEVER_WHITELISTABLE = ("app/policy/", "app/diagnosis/")
 
 #: Attribute names an adversarial policy would try. L8 asserts none resolve.
 PROBE_NAMES = [
@@ -203,9 +213,20 @@ def run_leak_checks(check, corpus_path, truth_map, payments, diagnoses):
 
     # ---- L5: only whitelisted modules import the truth loader -------------
     offenders = []
+    # A whitelist entry under a forbidden directory is itself a bug: it would
+    # mean someone granted a policy or classifier access to the answers.
+    illegal_whitelist = [
+        w for w in TRUTH_IMPORT_WHITELIST if w.startswith(NEVER_WHITELISTABLE)
+    ]
+    check(
+        "L5a no policy or classifier is whitelisted for ground truth",
+        not illegal_whitelist,
+        str(illegal_whitelist),
+    )
+
     for py in sorted([*(ROOT / "app").rglob("*.py"), *(ROOT / "scripts").rglob("*.py")]):
         rel = py.relative_to(ROOT).as_posix()
-        if rel in TRUTH_IMPORT_WHITELIST:
+        if rel in TRUTH_IMPORT_WHITELIST and not rel.startswith(NEVER_WHITELISTABLE):
             continue
         try:
             tree = ast.parse(py.read_text(encoding="utf-8"))
