@@ -29,6 +29,7 @@ from app.orchestrator import run_arm
 from app.policy.backoff_skip import BackoffSkipPolicy
 from app.policy.max_wait import MaxWaitPolicy
 from app.policy.naive import NaiveRetryPolicy
+from app.policy.payday_inference import PaydayInferencePolicy
 from app.policy.rules_recommended import RulesRecommendedPolicy
 
 #: arm -> (policy class, classifier kind). `llm_recommended` runs the SAME
@@ -40,6 +41,8 @@ ARMS: dict[str, tuple[type, str]] = {
     "backoff_skip": (BackoffSkipPolicy, "rules"),
     "rules_recommended": (RulesRecommendedPolicy, "rules"),
     "llm_recommended": (RulesRecommendedPolicy, "llm"),
+    "payday_inference": (PaydayInferencePolicy, "rules"),
+    "llm_payday": (PaydayInferencePolicy, "llm"),
     "max_wait_probe": (MaxWaitPolicy, "rules"),
 }
 

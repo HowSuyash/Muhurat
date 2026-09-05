@@ -16,7 +16,9 @@ reproduces offline with no API spend.
 | Arm | Recovered | Rate | Payments | Gateway attempts | Customers touched | ₹ per customer touched |
 |---|---:|---:|---:|---:|---:|---:|
 | **`llm_recommended`** | **₹296,199** | **58.11%** | 174/300 | 428 | 42 | ₹7,052 |
+| `llm_payday` | ₹295,749 | 58.03% | 174/300 | 429 | 42 | ₹7,042 |
 | `rules_recommended` | ₹285,928 | 56.10% | 165/300 | 546 | 17 | **₹16,819** |
+| `payday_inference` | ₹285,478 | 56.01% | 165/300 | 547 | 17 | ₹16,793 |
 | `backoff_skip` | ₹159,405 | 31.28% | 101/300 | 642 | 0 | — |
 | `naive_retry_3x` | ₹62,106 | 12.19% | 39/300 | 878 | 0 | — |
 | `max_wait_probe` | ₹52,732 | 10.35% | 34/300 | 300 | 0 | — |
@@ -320,6 +322,41 @@ _35 rules, generated from `config/rules.toml` (sha256 `a74575c07bfd`). Do not ed
 
 ---
 
+## A negative result worth keeping
+
+`payday_inference` was built to close the largest remaining gap: `INSUFFICIENT_FUNDS` is
+₹93,217 at risk and the rules arm recovers ~52% where the oracle reaches 82%. The arm uses a
+public prior over Indian salary dates (1st 40%, 7th 15%, month-end 9%) and aims its retries at
+the most likely paydays, scored by probability × attrition decay. No API, no hidden data.
+
+**It lost.** ₹285,478 vs ₹285,928 — worse by ₹450.
+
+The diagnostics explain why, and the explanation is the interesting part:
+
+| | `rules_recommended` | `payday_inference` |
+|---|---:|---:|
+| attempts landing in-window | 314 | **335** |
+| missed by being too early | 50 | **42** |
+| missed by being too late | 12 | **0** |
+| recovered | **₹285,928** | ₹285,478 |
+
+It is **strictly more accurate and slightly less valuable**. It hits the window more often and
+is never late, but it gets there by waiting — and `attrition_lambda` charges for waiting. The
+rules arm's crude "72 hours, then back off" guess misses more often, but when it lands it lands
+early and keeps far more of the value.
+
+Two honest conclusions. First, **precision without speed does not pay** in recovery: being right
+on day 12 is worth ~30% of being right on day 1. Second, the ₹28,530 that the ceiling analysis
+attributed to `INSUFFICIENT_FUNDS` was mostly *not* reachable by better retry timing — the oracle
+earns it by choosing the **contact** channel, which this arm gives up when it commits to
+`RETRY_AT_PAYDAY`. That is a flaw in the arm's design, not in the inference.
+
+The arm ships in the benchmark rather than being deleted, because a result that disconfirms the
+hypothesis is still a result, and `attrition_lambda` doing visible work is evidence the world
+model is not a rubber stamp.
+
+---
+
 ## Honest limitations
 
 1. **The executor is simulated. No real Razorpay API call is made.** `RazorpayExecutor` was
@@ -337,16 +374,19 @@ _35 rules, generated from `config/rules.toml` (sha256 `a74575c07bfd`). Do not ed
    assigns each of the 110 codes to a semantic family. The families carry the reasoning and are
    reviewable, but a payments engineer could reasonably disagree with individual rows.
 
-4. **The LLM's +2.01pp is within the range that corpus choices could move.** It is one seed and
+4. **`payday_inference` underperforms and is retained anyway** — see the section above. It is
+   reported as a negative result, not quietly dropped.
+
+5. **The LLM's +2.01pp is within the range that corpus choices could move.** It is one seed and
    one corpus. A sensitivity sweep over the world constants (±40%) was planned and **not built**.
 
-5. **The LLM arm is less contact-efficient** than the rules arm (₹7,052 vs ₹16,819 per customer
+6. **The LLM arm is less contact-efficient** than the rules arm (₹7,052 vs ₹16,819 per customer
    touched). It buys part of its gain by bothering more people.
 
-6. **`n=300`, one seed.** Per-class figures on small buckets (`MANDATE_FAILURE` n=10) carry large
+7. **`n=300`, one seed.** Per-class figures on small buckets (`MANDATE_FAILURE` n=10) carry large
    variance and should not be read as precise.
 
-7. **Per-class comparison between the two top arms is not meaningful**, because the LLM
+8. **Per-class comparison between the two top arms is not meaningful**, because the LLM
    *reclassifies* payments — the class buckets themselves differ between arms. Only the totals
    compare cleanly.
 
@@ -371,5 +411,4 @@ _35 rules, generated from `config/rules.toml` (sha256 `a74575c07bfd`). Do not ed
 
 - `RazorpayExecutor` / real API calls — explicitly out of scope.
 - Sensitivity sweep over `config/world.toml` (±40% on every constant).
-- A payday-timing inference arm — the largest remaining single gap at **₹28,530**.
 - Dashboard / frontend.
