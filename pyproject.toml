@@ -1,7 +1,7 @@
 [project]
-name = "ai-revenue-recovery"
+name = "muhurat"
 version = "0.1.0"
-description = "Razorpay AI Buildathon Track 03 -- diagnose failed payments, choose a bounded recovery action, measure the money recovered."
+description = "Muhurat -- a benchmark for failed-payment recovery, where the decision is when to act, not whether. Razorpay AI Buildathon, Track 03."
 readme = "README.md"
 # 3.11 is the floor (tomllib, StrEnum, and PEP 604 unions in dataclasses).
 # Developed and measured on 3.13.14.

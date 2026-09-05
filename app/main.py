@@ -14,8 +14,8 @@ from app.diagnosis.classifier import RulesClassifier
 from app.settings import get_settings
 
 app = FastAPI(
-    title="AI Revenue Recovery",
-    description="Razorpay AI Buildathon Track 03 -- failed payment recovery pipeline.",
+    title="Muhurat",
+    description="Recovery is a timing problem. Razorpay AI Buildathon, Track 03.",
     version="0.1.0",
 )
 

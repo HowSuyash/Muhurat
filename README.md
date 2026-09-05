@@ -1,4 +1,16 @@
-# AI Revenue Recovery — Razorpay AI Buildathon, Track 03
+# Muhurat
+
+### Recovery is a timing problem
+
+*Muhurat* (मुहूर्त) is the auspicious moment to act — the hour chosen because acting then
+succeeds and acting otherwise does not. Indian markets still open a ceremonial Muhurat trading
+session on Diwali for exactly that reason.
+
+That is this project's whole argument. A failed payment does not need more retries; it needs the
+retry placed at the moment its real blocker clears. **The question is never whether to retry. It
+is when, and on which channel.**
+
+**Razorpay AI Buildathon, Track 03 — AI Revenue Recovery.**
 
 A benchmark for failed-payment recovery. It ingests failed payments, diagnoses each one,
 chooses a bounded intervention, executes it against a simulated world, and measures the money
