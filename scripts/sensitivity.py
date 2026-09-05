@@ -40,6 +40,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import random
 from dataclasses import replace
 from pathlib import Path
@@ -120,6 +121,7 @@ def main() -> None:
     ap.add_argument("--n", type=int, default=300)
     ap.add_argument("--delta", type=float, default=0.40, help="fractional perturbation (default 0.40)")
     ap.add_argument("--joint", type=int, default=0, help="also run N random joint perturbations")
+    ap.add_argument("--json", type=Path, default=None, help="also write the scenarios as JSON")
     args = ap.parse_args()
 
     SCRATCH.mkdir(parents=True, exist_ok=True)
@@ -191,6 +193,24 @@ def main() -> None:
             f" {scores['rules_recommended'] / 100:>11,.0f} {delta:>10,.0f}"
             f" {'yes' if llm_wins else 'NO':>10} {winner:>18}"
         )
+
+    if args.json:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        args.json.write_text(json.dumps({
+            "delta": args.delta,
+            "scenarios": [
+                {
+                    "label": label,
+                    "scores": {k: v for k, v in sc.items()},
+                    "llm_wins": verdict(sc)[0],
+                    "probe_loses": verdict(sc)[1],
+                    "winner": verdict(sc)[2],
+                }
+                for label, sc in rows
+            ],
+        }, separators=(",", ":")), encoding="utf-8")
+        print()
+        print(f"  wrote {args.json}")
 
     total = len(rows)
     print()

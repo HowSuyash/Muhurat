@@ -89,14 +89,65 @@ def main() -> None:
             "attempts": s["gateway_attempts"],
             "touched": s["customers_touched"],
             "count": s["recovered_count"],
+            # Timing diagnosis: why this arm missed, not just that it did.
+            "timing": {
+                "in": s["in_window_attempts"], "early": s["missed_early"],
+                "late": s["missed_late"], "nowin": s["no_window_ever"],
+            },
+            "by_class": {
+                k: {"risk": v["at_risk_paise"], "rec": v["recovered_paise"],
+                    "rate": v["recovery_rate_value"], "n": v["n"]}
+                for k, v in s["by_class"].items()
+            },
         }
 
     span = max(
         max((f[0] for a in arms.values() for f in a["fires"]), default=0.0),
         max((p["t"] for p in pay), default=0.0),
     )
+    # --- context for the narrative pages ------------------------------------
+    from app.diagnosis.classifier import RulesClassifier
+    from app.diagnosis.rules import load_rule_table
+    from app.models import FailureClass
+
+    clf = RulesClassifier()
+    table = load_rule_table()
+    tail = [p for p in payments if clf.classify(p.error).failure_class is FailureClass.UNKNOWN]
+    method_mix: dict[str, int] = defaultdict(int)
+    for p in payments:
+        method_mix[str(p.method)] += 1
+
+    sens_path = RUNS / "sensitivity.json"
+    sensitivity = json.loads(sens_path.read_text(encoding="utf-8")) if sens_path.exists() else None
+
     payload = {
         "seed": manifest["seed"],
+        "rules_count": len(table),
+        "codes_total": 110,
+        "tail": {
+            "payments": len(tail),
+            "codes": len({p.error.reason for p in tail}),
+            "risk": sum(p.amount_paise for p in tail),
+        },
+        "methods": dict(method_mix),
+        "classes": {
+            k: {"risk": v["at_risk_paise"], "n": v["n"],
+                "ceiling": summary["ceiling_by_class"].get(k, 0)}
+            for k, v in next(a for a in summary["arms"]
+                             if a["arm"] == "rules_recommended")["by_class"].items()
+        },
+        "sensitivity": sensitivity,
+        # Control defects found by diffing arms against the oracle ceiling, and
+        # fixed BEFORE the LLM was measured. Each was money the AI arm would
+        # otherwise have banked without inferring anything.
+        "fixes": [
+            {"what": "rail/contact re-rolled per attempt", "paise": 4783800,
+             "kind": "executor bug", "note": "three contacts scored 0.96 instead of 0.35"},
+            {"what": "card_expired recommended contact, not rail", "paise": 2627600,
+             "kind": "rules-table defect", "note": "contact lands 0.35 one-shot; an alternate rail 0.65"},
+            {"what": "unmapped codes escalated to nothing", "paise": 7902300,
+             "kind": "strawman fallback", "note": "made the whole 36% tail score 0.0%"},
+        ],
         "at_risk": summary["at_risk_paise"],
         "ceiling": summary["ceiling_paise"],
         "ceiling_rate": summary["ceiling_rate"],

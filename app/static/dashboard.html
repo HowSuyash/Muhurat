@@ -3,77 +3,98 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Muhurat — Recovery Replay</title>
+<title>Muhurat</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
-/* A committed single-theme design: this is a night scene, and the ignition
-   glow only reads on a dark ground. Every colour is painted explicitly so the
-   page holds regardless of the host theme. */
+/* A committed night scene: the ignition glow only reads on a dark ground, so
+   every colour is painted explicitly rather than inherited from the host. */
 :root{
   color-scheme:dark;
-  --night:#0c0a08; --night-2:#141110; --panel:#17140f; --edge:#2a251e;
-  --ink:#f6f1e8; --ink2:#b9b1a3; --ink3:#7d766a;
-  --flame:#f5b13d; --flame-hot:#ffd98a;
-  --a1:#4a94ee; --a2:#e0663a; --a3:#22b183; --a4:#d55181; --a5:#9085e9; --a6:#e66767; --a7:#c98500;
-  --dim:#3a342c;
+  --night:#0c0a08;--night2:#141110;--panel:#17140f;--panel2:#1d1913;--edge:#2a251e;--edge2:#3a332a;
+  --ink:#f6f1e8;--ink2:#b9b1a3;--ink3:#7d766a;
+  --flame:#f5b13d;--hot:#ffd98a;--ember:#e0663a;
+  --a1:#4a94ee;--a2:#e0663a;--a3:#22b183;--a4:#d55181;--a5:#9085e9;--a6:#e66767;--a7:#c98500;
+  --dim:#3a342c;--good:#22b183;
 }
 *{box-sizing:border-box}
 html,body{background:var(--night)}
-body{margin:0;color:var(--ink);
-  font:14.5px/1.55 "IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-.wrap{max-width:1180px;margin:0 auto;padding:30px 22px 70px}
+body{margin:0;color:var(--ink);font:14.5px/1.6 "IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased}
 .mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.wrap{max-width:1180px;margin:0 auto;padding:0 22px 70px}
 
-/* masthead */
-.mast{display:flex;flex-wrap:wrap;align-items:baseline;gap:12px;margin-bottom:6px}
-h1{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:44px;margin:0;line-height:1;
-   letter-spacing:.005em}
-.deva{font-family:"Instrument Serif",Georgia,serif;font-size:23px;color:var(--flame);opacity:.85}
-.tag{margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink3)}
-.thesis{color:var(--ink2);margin:6px 0 24px;max-width:68ch;font-size:15px}
-.thesis em{font-family:"Instrument Serif",Georgia,serif;font-style:italic;font-size:17.5px;color:var(--flame-hot)}
+/* ---- top bar ---- */
+.top{position:sticky;top:0;z-index:30;background:rgba(12,10,8,.93);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--edge)}
+.topin{max-width:1180px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:9px;text-decoration:none;color:var(--ink)}
+.brand b{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:27px;line-height:1}
+.brand .deva{font-family:"Instrument Serif",Georgia,serif;font-size:15px;color:var(--flame);opacity:.9}
+nav{display:flex;gap:2px;flex-wrap:wrap;margin-left:auto}
+nav a{font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.04em;color:var(--ink3);
+  text-decoration:none;padding:6px 12px;border-radius:3px;border:1px solid transparent;transition:.13s}
+nav a:hover{color:var(--ink2)}
+nav a[aria-current="page"]{color:var(--flame);border-color:var(--edge2);background:var(--night2)}
+nav a:focus-visible,button:focus-visible,.chip:focus-visible,input:focus-visible{
+  outline:2px solid var(--flame);outline-offset:2px}
 
-/* stage */
-.stage{background:linear-gradient(180deg,var(--night-2),var(--panel));
-  border:1px solid var(--edge);border-radius:6px;padding:18px 20px 14px;margin-bottom:16px}
-.readout{display:flex;flex-wrap:wrap;gap:10px 34px;align-items:flex-end;margin-bottom:14px}
-.ro .k{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.12em;
+/* ---- page furniture ---- */
+.page{padding-top:34px;animation:in .3s ease}
+@keyframes in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--flame);margin-bottom:9px}
+h1{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:46px;margin:0 0 12px;
+  line-height:1.05;letter-spacing:.004em;text-wrap:balance;max-width:20ch}
+h1 em{font-style:italic;color:var(--flame)}
+.lede{color:var(--ink2);font-size:16.5px;max-width:64ch;margin:0 0 30px}
+.lede strong{color:var(--ink);font-weight:500}
+h2{font-size:11.5px;font-weight:600;margin:0 0 13px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2)}
+p{max-width:70ch}
+.sub{color:var(--ink2);font-size:13.5px;max-width:74ch;margin:0 0 16px}
+
+.panel{background:var(--panel);border:1px solid var(--edge);border-radius:6px;padding:18px 20px;margin-bottom:16px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}
+
+/* ---- stat strip ---- */
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:1px;
+  background:var(--edge);border:1px solid var(--edge);border-radius:5px;overflow:hidden;margin-bottom:22px}
+.cell{background:var(--panel);padding:14px 16px}
+.cell .k{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.12em;
   text-transform:uppercase;color:var(--ink3)}
+.cell .v{font-size:27px;font-weight:600;letter-spacing:-.02em;margin-top:6px;font-variant-numeric:tabular-nums;line-height:1.1}
+.cell .n{font-size:11.5px;color:var(--ink3);margin-top:3px;font-family:"IBM Plex Mono",monospace}
+.cell.f .v{color:var(--flame)}.cell.h .v{color:var(--hot)}.cell.e .v{color:var(--ember)}
+
+/* ---- replay stage ---- */
+.stage{background:linear-gradient(180deg,var(--night2),var(--panel));border:1px solid var(--edge);
+  border-radius:6px;padding:18px 20px 14px;margin-bottom:16px}
+.readout{display:flex;flex-wrap:wrap;gap:10px 34px;align-items:flex-end;margin-bottom:14px}
+.ro .k{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
 .ro .v{font-size:31px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
-.ro.day .v{color:var(--flame)}
-.ro.money .v{color:var(--flame-hot)}
+.ro.day .v{color:var(--flame)}.ro.money .v{color:var(--hot)}
 .ro .s{font-size:11.5px;color:var(--ink3);font-family:"IBM Plex Mono",monospace}
 canvas{display:block;width:100%;height:auto;border-radius:4px}
-
-/* transport */
-.transport{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:12px}
-button{font:inherit;font-family:"IBM Plex Mono",monospace;font-size:12px;padding:6px 14px;
-  border:1px solid var(--edge);border-radius:3px;background:var(--night-2);color:var(--ink2);cursor:pointer;
-  transition:border-color .12s,color .12s}
+.transport{display:flex;flex-wrap:wrap;gap:11px;align-items:center;margin-top:12px}
+button{font-family:"IBM Plex Mono",monospace;font-size:12px;padding:6px 14px;border:1px solid var(--edge2);
+  border-radius:3px;background:var(--night2);color:var(--ink2);cursor:pointer;transition:.13s}
 button:hover{border-color:var(--ink3);color:var(--ink)}
 button.pri{border-color:var(--flame);color:var(--flame)}
 button.pri:hover{background:rgba(245,177,61,.1)}
-button:focus-visible,.chip:focus-visible,input:focus-visible{outline:2px solid var(--flame);outline-offset:2px}
-input[type=range]{flex:1;min-width:180px;accent-color:var(--flame);background:transparent}
-.spd{display:flex;gap:4px}
-.spd button{padding:4px 9px;font-size:11px}
+input[type=range]{flex:1;min-width:170px;accent-color:var(--flame);background:transparent}
+.spd{display:flex;gap:4px}.spd button{padding:4px 9px;font-size:11px}
 .spd button[aria-pressed="true"]{border-color:var(--flame);color:var(--flame)}
-
-/* chips */
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
 .chip{font-family:"IBM Plex Mono",monospace;font-size:11.5px;padding:4px 11px;border-radius:99px;
-  border:1px solid var(--edge);background:var(--night-2);color:var(--ink3);cursor:pointer;
-  display:inline-flex;align-items:center;gap:7px;transition:all .12s}
+  border:1px solid var(--edge2);background:var(--night2);color:var(--ink3);cursor:pointer;
+  display:inline-flex;align-items:center;gap:7px;transition:.13s}
 .chip .dot{width:8px;height:8px;border-radius:99px;background:currentColor;flex:none}
 .chip[aria-pressed="true"]{color:var(--ink);border-color:currentColor}
-.chip.focus{box-shadow:inset 0 0 0 1px currentColor}
+.chip.foc{box-shadow:inset 0 0 0 1px currentColor}
 .hint{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink3);margin-top:10px}
 
-/* standings */
-.panel{background:var(--panel);border:1px solid var(--edge);border-radius:6px;padding:16px 20px;margin-bottom:16px}
-h2{font-size:11.5px;font-weight:600;margin:0 0 12px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink2)}
+/* ---- tables ---- */
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{text-align:right;padding:8px 11px;border-bottom:1px solid var(--edge);white-space:nowrap;
   font-variant-numeric:tabular-nums}
@@ -82,282 +103,534 @@ th{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.1em;tex
   color:var(--ink3);font-weight:500}
 tbody tr:last-child td{border-bottom:none}
 td.nm{font-family:"IBM Plex Mono",monospace;font-size:12.5px}
-td.nm i{display:inline-block;width:8px;height:8px;border-radius:99px;margin-right:9px}
+td.nm i{display:inline-block;width:8px;height:8px;border-radius:99px;margin-right:9px;vertical-align:middle}
 .bar{height:5px;border-radius:3px;min-width:2px}
-footer{color:var(--ink3);font-size:12px;max-width:76ch;margin-top:22px}
 .scroll{overflow-x:auto}
-.err{padding:50px;text-align:center;color:var(--ink2)}
-@media(prefers-reduced-motion:reduce){#play{display:none}}
-@media(max-width:620px){h1{font-size:34px}.ro .v{font-size:25px}}
+
+/* ---- misc blocks ---- */
+.quote{border-left:2px solid var(--flame);padding:2px 0 2px 16px;margin:22px 0;
+  font-family:"Instrument Serif",Georgia,serif;font-style:italic;font-size:21px;color:var(--hot);max-width:44ch}
+.stepnum{font-family:"Instrument Serif",Georgia,serif;font-size:30px;color:var(--flame);line-height:1;opacity:.75}
+.step{display:flex;gap:16px;padding:14px 0;border-top:1px solid var(--edge)}
+.step:first-child{border-top:none}
+.step h3{margin:0 0 4px;font-size:15px;font-weight:600}
+.step p{margin:0;color:var(--ink2);font-size:13.5px}
+.ck{display:flex;gap:10px;align-items:baseline;font-size:12.5px;color:var(--ink2);padding:3px 0}
+.ck i{color:var(--good);font-style:normal;font-weight:700;font-size:11px}
+.ck code{color:var(--ink);font-family:"IBM Plex Mono",monospace;font-size:11.5px}
+.checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:0 26px}
+.flag{border:1px solid var(--edge2);border-left:3px solid var(--ember);background:var(--night2);
+  padding:13px 17px;border-radius:0 4px 4px 0;font-size:13.5px;color:var(--ink2);margin:14px 0}
+.flag b{color:var(--ink)}
+.fixrow{display:flex;gap:14px;align-items:baseline;padding:11px 0;border-top:1px solid var(--edge)}
+.fixrow:first-child{border-top:none}
+.fixrow .amt{font-family:"IBM Plex Mono",monospace;font-size:15px;color:var(--ember);font-weight:600;
+  min-width:104px;text-align:right;font-variant-numeric:tabular-nums}
+.fixrow .what{font-size:13.5px}
+.fixrow .note{font-size:12px;color:var(--ink3);margin-top:2px}
+.kind{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink3);border:1px solid var(--edge2);border-radius:99px;padding:1px 8px;white-space:nowrap}
+footer{color:var(--ink3);font-size:12px;max-width:76ch;margin-top:30px;padding-top:16px;border-top:1px solid var(--edge)}
+.err{padding:60px;text-align:center;color:var(--ink2)}
+@media(prefers-reduced-motion:reduce){.page{animation:none}}
+@media(max-width:620px){h1{font-size:33px}.ro .v{font-size:24px}nav{margin-left:0;width:100%}}
 </style>
 </head>
 <body>
-<div class="wrap" id="root"><div class="err mono">Loading replay…</div></div>
+<div class="top"><div class="topin">
+  <a class="brand" href="#problem"><b>Muhurat</b><span class="deva">मुहूर्त</span></a>
+  <nav id="nav"></nav>
+</div></div>
+<div class="wrap" id="root"><div class="err mono">Loading…</div></div>
+
 <script>
 const R="₹";
 const money=p=>R+Math.round(p/100).toLocaleString("en-IN");
-const short=p=>{const r=p/100;return r>=1e5?R+(r/1e5).toFixed(2)+"L":R+Math.round(r).toLocaleString("en-IN")};
+const lakh=p=>{const r=p/100;return r>=1e5?R+(r/1e5).toFixed(2)+"L":R+Math.round(r).toLocaleString("en-IN")};
 const pct=v=>(v*100).toFixed(2)+"%";
+const pct1=v=>(v*100).toFixed(1)+"%";
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const CSS=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
-let D=null, C=null, ctx=null;
-// Colour is bound to the arm name, so toggling never repaints a survivor.
-const HUE={}, SLOTS=["--a1","--a2","--a3","--a4","--a5","--a6","--a7"];
-// Three lines by default: past three, adjacent hues stop being reliably
-// separable for colour-blind viewers, so extra arms are opt-in and every line
-// is also labelled directly at its endpoint.
+let D=null,ctx=null,raf=null;
+const HUE={},SLOTS=["--a1","--a2","--a3","--a4","--a5","--a6","--a7"];
 const DEFAULT_ON=["naive_retry_3x","rules_recommended","llm_recommended"];
+const S={on:new Set(DEFAULT_ON),focus:"llm_recommended",t:0,playing:false,speed:1};
 
-const S={on:new Set(DEFAULT_ON), focus:"llm_recommended", t:0, playing:true, speed:1};
+const PAGES=[
+  ["problem","The problem"],["window","The window"],["replay","The replay"],
+  ["arms","The policies"],["integrity","Integrity"]
+];
 
-/* ---------------- the replay canvas ---------------- */
+/* ============================ PAGE 1 — PROBLEM ============================ */
+function classBars(){
+  const cls=Object.entries(D.classes).sort((a,b)=>b[1].risk-a[1].risk);
+  const max=Math.max(...cls.map(c=>c[1].risk));
+  return cls.map(([k,v])=>{
+    const isTail=k==="UNKNOWN";
+    return '<div style="display:flex;align-items:center;gap:12px;padding:6px 0">'+
+      '<div class="mono" style="font-size:11.5px;width:170px;color:'+(isTail?"var(--flame)":"var(--ink2)")+'">'+
+      esc(isTail?"UNMAPPED TAIL":k)+'</div>'+
+      '<div style="flex:1;min-width:60px"><div class="bar" style="width:'+(v.risk/max*100)+'%;height:9px;background:'+
+      (isTail?"var(--flame)":"var(--dim)")+'"></div></div>'+
+      '<div class="mono" style="font-size:11.5px;width:78px;text-align:right;color:var(--ink2)">'+lakh(v.risk)+'</div>'+
+      '<div class="mono" style="font-size:11px;width:42px;text-align:right;color:var(--ink3)">'+v.n+'</div></div>';
+  }).join("");
+}
+function pageProblem(){
+  const naive=D.arms.naive_retry_3x;
+  return '<div class="eyebrow">The problem</div>'+
+  '<h1>A failed payment is not a lost payment. It is a <em>mistimed</em> one.</h1>'+
+  '<p class="lede">Merchants answer failed payments by retrying — immediately, three times, identically for '+
+  'every failure. But most failures carry a reason that decides <strong>when</strong> recovery is possible, '+
+  'and often whether it is possible at all.</p>'+
+
+  '<div class="strip">'+
+  '<div class="cell f"><div class="k">At risk</div><div class="v">'+lakh(D.at_risk)+'</div><div class="n">300 failed payments</div></div>'+
+  '<div class="cell e"><div class="k">Naive retry recovers</div><div class="v">'+pct1(naive.rate)+'</div><div class="n">'+naive.attempts+' attempts spent</div></div>'+
+  '<div class="cell h"><div class="k">Actually recoverable</div><div class="v">'+pct1(D.ceiling_rate)+'</div><div class="n">if you knew every window</div></div>'+
+  '<div class="cell"><div class="k">Error codes</div><div class="v">'+D.codes_total+'</div><div class="n">all real, all published</div></div>'+
+  '</div>'+
+
+  '<div class="grid2">'+
+  '<div class="panel"><h2>Three failures, three different answers</h2>'+
+  '<div class="step"><span class="stepnum">01</span><div><h3>insufficient_funds</h3>'+
+  '<p>The account is empty. It refills on the customer&rsquo;s <b>salary date</b> — days away, not seconds. '+
+  'Three retries in six minutes hit an empty account three times.</p></div></div>'+
+  '<div class="step"><span class="stepnum">02</span><div><h3>bank_technical_error</h3>'+
+  '<p>The issuer is down. It comes back in <b>two to five hours</b>, on its own. An immediate retry lands '+
+  'inside the same outage it just failed in.</p></div></div>'+
+  '<div class="step"><span class="stepnum">03</span><div><h3>card_expired</h3>'+
+  '<p>The card is dead and will never clear. <b>No amount of waiting helps.</b> Every attempt spent here is '+
+  'pure cost — and the naive policy spends three.</p></div></div></div>'+
+
+  '<div class="panel"><h2>Where the money sits</h2>'+
+  '<p class="sub">By failure class, across the 300-payment corpus. The largest single bucket is the '+
+  '<b style="color:var(--flame)">unmapped tail</b> — '+D.tail.codes+' error codes that no hand-written rule covers.</p>'+
+  classBars()+
+  '<p class="sub" style="margin-top:16px">A rules table covers '+D.rules_count+' of '+D.codes_total+
+  ' published Razorpay codes. Real traffic sees all of them, so a third of the money lands where the table '+
+  'has nothing to say.</p></div>'+
+  '</div>'+
+
+  '<div class="quote">The question is never whether to retry. It is when, and on which channel.</div>'+
+  '<p class="sub">So this project is a benchmark, not a bot. It measures recovery policies against a world '+
+  'where timing decides outcomes — and it is built so that no policy, including ours, can cheat.</p>';
+}
+
+/* ============================ PAGE 2 — WINDOW ============================ */
+let winT=6;
+function windowViz(){
+  const w=1120,h=210,padL=70,padR=40,padT=34;
+  const span=336, x=hr=>padL+(hr/span)*(w-padL-padR);
+  const open=48, close=336;
+  let s='<svg viewBox="0 0 '+w+' '+h+'" role="img" aria-label="A single payment: when its window is open">';
+  for(let d=0;d<=14;d+=2){const px=x(d*24);
+    s+='<line x1="'+px+'" y1="'+(padT-8)+'" x2="'+px+'" y2="'+(padT+96)+'" stroke="rgba(255,255,255,.05)"/>'+
+       '<text x="'+px+'" y="'+(padT+116)+'" text-anchor="middle" fill="'+CSS("--ink3")+
+       '" font-size="10" font-family="IBM Plex Mono, monospace">day '+d+'</text>';}
+  s+='<rect x="'+x(0)+'" y="'+padT+'" width="'+(x(open)-x(0))+'" height="46" fill="rgba(224,102,58,.13)" rx="3"/>'+
+     '<text x="'+((x(0)+x(open))/2)+'" y="'+(padT+27)+'" text-anchor="middle" fill="'+CSS("--ember")+
+     '" font-size="11" font-family="IBM Plex Mono, monospace">blocked — no balance</text>';
+  const grad='<defs><linearGradient id="wg" x1="0" x2="1"><stop offset="0" stop-color="'+CSS("--flame")+
+    '" stop-opacity=".45"/><stop offset="1" stop-color="'+CSS("--flame")+'" stop-opacity=".08"/></linearGradient></defs>';
+  s+=grad+'<rect x="'+x(open)+'" y="'+padT+'" width="'+(x(close)-x(open))+'" height="46" fill="url(#wg)" rx="3"/>'+
+     '<line x1="'+x(open)+'" y1="'+(padT-6)+'" x2="'+x(open)+'" y2="'+(padT+52)+'" stroke="'+CSS("--flame")+'" stroke-width="2"/>'+
+     '<text x="'+(x(open)+8)+'" y="'+(padT-12)+'" fill="'+CSS("--flame")+
+     '" font-size="11" font-family="IBM Plex Mono, monospace">salary lands — window opens</text>';
+  // the viewer's chosen attempt
+  const px=x(winT), inside=winT>=open;
+  const decay=Math.exp(-0.10*(winT/24));
+  const p=(inside?0.90:0.02)*decay;
+  s+='<line x1="'+px+'" y1="'+(padT+56)+'" x2="'+px+'" y2="'+(padT+96)+'" stroke="'+CSS("--ink")+'" stroke-width="1.5"/>'+
+     '<circle cx="'+px+'" cy="'+(padT+96)+'" r="6" fill="'+(inside?CSS("--hot"):CSS("--dim"))+
+     '" stroke="'+CSS("--ink")+'" stroke-width="1.5"/>'+
+     '<text x="'+px+'" y="'+(padT+88)+'" text-anchor="middle" fill="'+CSS("--ink")+
+     '" font-size="11" font-family="IBM Plex Mono, monospace">your retry</text></svg>';
+  return {svg:s,p:p,inside:inside};
+}
+function pageWindow(){
+  const v=windowViz();
+  return '<div class="eyebrow">The mechanic</div>'+
+  '<h1>Every payment hides a <em>window</em>.</h1>'+
+  '<p class="lede">It opens the moment the real blocker clears, and it decays from there because customers '+
+  'drift away. A policy never sees it — it has to infer when it opened, and pay for guessing wrong in either '+
+  'direction.</p>'+
+  '<div class="panel"><h2>Try it — one insufficient_funds payment</h2>'+
+  '<p class="sub">This customer&rsquo;s salary lands on day 2. Drag to choose when you retry.</p>'+
+  '<div class="scroll" id="wviz">'+v.svg+'</div>'+
+  '<div class="transport" style="margin-top:6px">'+
+  '<input type="range" id="wslide" min="0" max="336" step="1" value="'+winT+'" aria-label="Choose when to retry">'+
+  '<div class="mono" style="font-size:12px;color:var(--ink3);min-width:230px;text-align:right">'+
+  'retry at <b style="color:var(--ink)">day '+(winT/24).toFixed(1)+'</b> → success '+
+  '<b style="color:'+(v.inside?"var(--hot)":"var(--ember)")+'">'+pct1(v.p)+'</b></div></div>'+
+  '<div class="flag" style="margin-top:16px">'+(v.inside
+    ? '<b>Inside the window.</b> But you still lose value to attrition: waiting '+(winT/24).toFixed(1)+
+      ' days costs '+pct1(1-Math.exp(-0.10*(winT/24)))+' of what an instant recovery would have been worth. '+
+      'Being right late is worth far less than being right early.'
+    : '<b>Too early.</b> The account is still empty, so this attempt is near-worthless — and it is not free: '+
+      'it costs a gateway attempt and, on some rails, a worse risk score.')+'</div></div>'+
+
+  '<div class="grid2">'+
+  '<div class="panel"><h2>Three channels, not one</h2>'+
+  '<p class="sub">Each payment has up to three ways back, each with its own window.</p>'+
+  '<div class="step"><span class="stepnum" style="color:var(--a1)">◆</span><div><h3>Retry</h3>'+
+  '<p>Same instrument, same rail, later. Opens when the blocker clears — an outage ending, a salary landing, '+
+  'a cooldown lapsing.</p></div></div>'+
+  '<div class="step"><span class="stepnum" style="color:var(--a3)">◆</span><div><h3>Switch rail</h3>'+
+  '<p>Move the payment to UPI. Usually open immediately, but it depends on a fixed fact about the '+
+  'customer — so trying three times is worth exactly as much as trying once.</p></div></div>'+
+  '<div class="step"><span class="stepnum" style="color:var(--a2)">◆</span><div><h3>Contact</h3>'+
+  '<p>Ask the customer to act. The highest-friction option, and the eval charges for it: recovering more by '+
+  'contacting everybody is not a better system.</p></div></div></div>'+
+
+  '<div class="panel"><h2>Why the world cannot be gamed</h2>'+
+  '<p class="sub">The obvious way to build this benchmark is rigged. If you write success probabilities into '+
+  'a config keyed by failure type, you have authored the reward function that makes your own agent win.</p>'+
+  '<p class="sub">So there are exactly <b style="color:var(--flame)">six global constants</b>, none of them '+
+  'keyed by failure class:</p>'+
+  '<div class="mono" style="font-size:12px;color:var(--ink2);line-height:2;padding:12px 14px;'+
+  'background:var(--night2);border:1px solid var(--edge);border-radius:4px">'+
+  'p_in_retry <span style="color:var(--hot)">0.90</span><br>'+
+  'p_in_rail <span style="color:var(--hot)">0.65</span><br>'+
+  'p_in_contact <span style="color:var(--hot)">0.35</span><br>'+
+  'p_out <span style="color:var(--hot)">0.02</span><br>'+
+  'attrition_horizon_days <span style="color:var(--hot)">14</span><br>'+
+  'attrition_lambda <span style="color:var(--hot)">0.10</span></div>'+
+  '<p class="sub" style="margin-top:14px">Every difference between failure classes comes from <b>when the '+
+  'window opens</b>, derived from what the failure actually is. The test suite fails the build if a '+
+  'failure-class name ever appears in that file.</p></div>'+
+  '</div>';
+}
+
+/* ============================ PAGE 3 — REPLAY ============================ */
 const LAY={w:1120,h:520,raceH:274,padL:78,padR:158,padT:26,gridTop:382};
-
 function draw(){
-  const w=LAY.w,h=LAY.h;
-  ctx.clearRect(0,0,w,h);
-  const span=D.span_h, t=S.t;
+  if(!ctx)return;
+  const w=LAY.w;ctx.clearRect(0,0,w,LAY.h);
+  const span=D.span_h,t=S.t;
   const x=hr=>LAY.padL+(hr/span)*(w-LAY.padL-LAY.padR);
-  const maxY=Math.max(D.ceiling, ...Object.values(D.arms).map(a=>a.total))*1.04;
+  const maxY=Math.max(D.ceiling,...Object.values(D.arms).map(a=>a.total))*1.04;
   const y=v=>LAY.padT+LAY.raceH-(v/maxY)*LAY.raceH;
-
-  // --- day grid ------------------------------------------------------------
-  ctx.font='10px "IBM Plex Mono", monospace'; ctx.textAlign="center";
-  for(let d=0;d<=14;d+=2){
-    const px=x(d*24);
-    ctx.strokeStyle="rgba(255,255,255,.05)"; ctx.lineWidth=1;
-    ctx.beginPath(); ctx.moveTo(px,LAY.padT-6); ctx.lineTo(px,LAY.padT+LAY.raceH); ctx.stroke();
-    ctx.fillStyle=CSS("--ink3"); ctx.fillText("day "+d,px,LAY.padT+LAY.raceH+17);
-  }
-  // rupee axis
+  ctx.font='10px "IBM Plex Mono", monospace';ctx.textAlign="center";
+  for(let d=0;d<=14;d+=2){const px=x(d*24);
+    ctx.strokeStyle="rgba(255,255,255,.05)";ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(px,LAY.padT-6);ctx.lineTo(px,LAY.padT+LAY.raceH);ctx.stroke();
+    ctx.fillStyle=CSS("--ink3");ctx.fillText("day "+d,px,LAY.padT+LAY.raceH+17);}
   ctx.textAlign="right";
-  for(let i=0;i<=3;i++){
-    const v=maxY/3*i;
-    ctx.fillStyle=CSS("--ink3"); ctx.fillText(short(v),LAY.padL-10,y(v)+3);
+  for(let i=0;i<=3;i++){const v=maxY/3*i;
+    ctx.fillStyle=CSS("--ink3");ctx.fillText(lakh(v),LAY.padL-10,y(v)+3);
     ctx.strokeStyle="rgba(255,255,255,.04)";
-    ctx.beginPath(); ctx.moveTo(LAY.padL,y(v)); ctx.lineTo(w-LAY.padR,y(v)); ctx.stroke();
-  }
-  // ceiling
-  ctx.setLineDash([5,4]); ctx.strokeStyle="rgba(246,241,232,.42)"; ctx.lineWidth=1.5;
-  ctx.beginPath(); ctx.moveTo(LAY.padL,y(D.ceiling)); ctx.lineTo(w-LAY.padR,y(D.ceiling)); ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.textAlign="left"; ctx.fillStyle=CSS("--ink2");
-  ctx.fillText("oracle ceiling "+short(D.ceiling),LAY.padL+6,y(D.ceiling)-7);
-
-  // --- cumulative recovery lines ------------------------------------------
+    ctx.beginPath();ctx.moveTo(LAY.padL,y(v));ctx.lineTo(w-LAY.padR,y(v));ctx.stroke();}
+  ctx.setLineDash([5,4]);ctx.strokeStyle="rgba(246,241,232,.42)";ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(LAY.padL,y(D.ceiling));ctx.lineTo(w-LAY.padR,y(D.ceiling));ctx.stroke();
+  ctx.setLineDash([]);ctx.textAlign="left";ctx.fillStyle=CSS("--ink2");
+  ctx.fillText("oracle ceiling "+lakh(D.ceiling),LAY.padL+6,y(D.ceiling)-7);
   const ends=[];
   D.order.forEach(name=>{
     if(!S.on.has(name))return;
-    const a=D.arms[name], col=CSS(HUE[name]);
-    let sum=0, px=LAY.padL, py=y(0);
-    ctx.beginPath(); ctx.moveTo(px,py);
-    ctx.lineWidth=name===S.focus?2.6:1.6;
-    ctx.strokeStyle=col;
-    ctx.globalAlpha=name===S.focus?1:.72;
-    for(const wi of a.wins){
-      if(wi[0]>t)break;
-      const nx=x(wi[0]);
-      ctx.lineTo(nx,py);          // step: money lands at an instant
-      sum+=wi[2]; py=y(sum);
-      ctx.lineTo(nx,py);
-    }
-    ctx.lineTo(x(t),py); ctx.stroke();
-    ctx.globalAlpha=1;
-    // endpoint marker + direct label -- identity never rests on colour alone
-    ctx.beginPath(); ctx.arc(x(t),py,name===S.focus?4.5:3,0,7); ctx.fillStyle=col; ctx.fill();
-    ends.push({name,y:py,col,sum});
+    const a=D.arms[name],col=CSS(HUE[name]);
+    let sum=0,py=y(0);
+    ctx.beginPath();ctx.moveTo(LAY.padL,py);
+    ctx.lineWidth=name===S.focus?2.6:1.6;ctx.strokeStyle=col;ctx.globalAlpha=name===S.focus?1:.72;
+    for(const wi of a.wins){if(wi[0]>t)break;const nx=x(wi[0]);
+      ctx.lineTo(nx,py);sum+=wi[2];py=y(sum);ctx.lineTo(nx,py);}
+    ctx.lineTo(x(t),py);ctx.stroke();ctx.globalAlpha=1;
+    ctx.beginPath();ctx.arc(x(t),py,name===S.focus?4.5:3,0,7);ctx.fillStyle=col;ctx.fill();
+    ends.push({name,y:py,col});
   });
-  // de-collide the endpoint labels
   ends.sort((p,q)=>p.y-q.y);
-  for(let i=1;i<ends.length;i++) if(ends[i].y-ends[i-1].y<13) ends[i].y=ends[i-1].y+13;
-  ctx.textAlign="left"; ctx.font='10.5px "IBM Plex Mono", monospace';
-  ends.forEach(e=>{
-    ctx.fillStyle=e.col;
-    ctx.fillText(e.name.replace(/_/g," "),w-LAY.padR+8,e.y+3);
-  });
-
-  // --- the lamp field: one dot per payment, lit when the focus arm wins ----
-  const f=D.arms[S.focus];
-  const cols=30, cell=(w-LAY.padL-LAY.padR)/cols, r=3.1;
-  const lit=new Map();
-  for(const wi of f.wins){ if(wi[0]>t)break; lit.set(wi[1],wi[0]); }
-  // recent misses flare briefly, so you can see effort being spent
-  const recent=new Map();
-  for(const fi of f.fires){ if(fi[0]>t)break; if(t-fi[0]<6&&!fi[2]) recent.set(fi[1],fi[0]); }
-
-  ctx.textAlign="left"; ctx.font='9.5px "IBM Plex Mono", monospace';
-  ctx.fillStyle=CSS("--ink3");
-  ctx.fillText("each lamp is one failed payment · lit when "+S.focus.replace(/_/g," ")+" recovers it",
-               LAY.padL,LAY.gridTop-16);
-
+  for(let i=1;i<ends.length;i++)if(ends[i].y-ends[i-1].y<13)ends[i].y=ends[i-1].y+13;
+  ctx.textAlign="left";ctx.font='10.5px "IBM Plex Mono", monospace';
+  ends.forEach(e=>{ctx.fillStyle=e.col;ctx.fillText(e.name.replace(/_/g," "),w-LAY.padR+8,e.y+3)});
+  const f=D.arms[S.focus],cols=30,cell=(w-LAY.padL-LAY.padR)/cols,r=3.1;
+  const lit=new Map();for(const wi of f.wins){if(wi[0]>t)break;lit.set(wi[1],wi[0])}
+  const recent=new Map();for(const fi of f.fires){if(fi[0]>t)break;if(t-fi[0]<6&&!fi[2])recent.set(fi[1],fi[0])}
+  ctx.textAlign="left";ctx.font='9.5px "IBM Plex Mono", monospace';ctx.fillStyle=CSS("--ink3");
+  ctx.fillText("each lamp is one failed payment · lit when "+S.focus.replace(/_/g," ")+" recovers it",LAY.padL,LAY.gridTop-16);
   for(let i=0;i<D.payments.length;i++){
-    const p=D.payments[i];
-    const cx=LAY.padL+(i%cols)*cell+cell/2;
-    const cy=LAY.gridTop+Math.floor(i/cols)*11+6;
-    const born=p.t<=t;
-    if(!born){ ctx.beginPath(); ctx.arc(cx,cy,1.4,0,7);
-      ctx.fillStyle="rgba(255,255,255,.06)"; ctx.fill(); continue; }
+    const p=D.payments[i],cx=LAY.padL+(i%cols)*cell+cell/2,cy=LAY.gridTop+Math.floor(i/cols)*11+6;
+    if(p.t>t){ctx.beginPath();ctx.arc(cx,cy,1.4,0,7);ctx.fillStyle="rgba(255,255,255,.06)";ctx.fill();continue}
     const at=lit.get(i);
     if(at!==undefined){
-      const age=t-at, ig=Math.min(1,age/4);          // ignition ramp
+      const ig=Math.min(1,(t-at)/4);
       const gr=ctx.createRadialGradient(cx,cy,0,cx,cy,7.5);
       gr.addColorStop(0,"rgba(255,217,138,"+(.95-ig*.2)+")");
       gr.addColorStop(.42,"rgba(245,177,61,"+(.55-ig*.18)+")");
       gr.addColorStop(1,"rgba(245,177,61,0)");
-      ctx.beginPath(); ctx.arc(cx,cy,7.5,0,7); ctx.fillStyle=gr; ctx.fill();
-      ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fillStyle=CSS("--flame-hot"); ctx.fill();
-    } else if(recent.has(i)){
-      const age=t-recent.get(i), fade=1-age/6;
-      ctx.beginPath(); ctx.arc(cx,cy,r+1.4,0,7);
-      ctx.strokeStyle="rgba(224,102,58,"+(fade*.75)+")"; ctx.lineWidth=1.3; ctx.stroke();
-      ctx.beginPath(); ctx.arc(cx,cy,r-.7,0,7); ctx.fillStyle=CSS("--dim"); ctx.fill();
-    } else {
-      ctx.beginPath(); ctx.arc(cx,cy,r-.7,0,7); ctx.fillStyle=CSS("--dim"); ctx.fill();
-    }
+      ctx.beginPath();ctx.arc(cx,cy,7.5,0,7);ctx.fillStyle=gr;ctx.fill();
+      ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.fillStyle=CSS("--hot");ctx.fill();
+    }else if(recent.has(i)){
+      const fade=1-(t-recent.get(i))/6;
+      ctx.beginPath();ctx.arc(cx,cy,r+1.4,0,7);
+      ctx.strokeStyle="rgba(224,102,58,"+(fade*.75)+")";ctx.lineWidth=1.3;ctx.stroke();
+      ctx.beginPath();ctx.arc(cx,cy,r-.7,0,7);ctx.fillStyle=CSS("--dim");ctx.fill();
+    }else{ctx.beginPath();ctx.arc(cx,cy,r-.7,0,7);ctx.fillStyle=CSS("--dim");ctx.fill()}
   }
-
-  // --- the moving now-line -------------------------------------------------
-  ctx.strokeStyle="rgba(245,177,61,.5)"; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(x(t),LAY.padT-6); ctx.lineTo(x(t),LAY.padT+LAY.raceH+2); ctx.stroke();
+  ctx.strokeStyle="rgba(245,177,61,.5)";ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(x(t),LAY.padT-6);ctx.lineTo(x(t),LAY.padT+LAY.raceH+2);ctx.stroke();
 }
-
 function readout(){
-  const f=D.arms[S.focus];
-  let sum=0,n=0,att=0;
-  for(const wi of f.wins){ if(wi[0]>S.t)break; sum+=wi[2]; n++; }
-  for(const fi of f.fires){ if(fi[0]>S.t)break; att++; }
-  document.getElementById("day").textContent="d"+(S.t/24).toFixed(1);
-  document.getElementById("rec").textContent=money(sum);
-  document.getElementById("recs").textContent=n+" of "+D.payments.length+" payments · "+att+" attempts spent";
-  document.getElementById("rate").textContent=pct(sum/D.at_risk);
-  document.getElementById("scrub").value=String(S.t);
+  const f=D.arms[S.focus];let sum=0,n=0,att=0;
+  for(const wi of f.wins){if(wi[0]>S.t)break;sum+=wi[2];n++}
+  for(const fi of f.fires){if(fi[0]>S.t)break;att++}
+  const g=id=>document.getElementById(id);
+  if(!g("day"))return;
+  g("day").textContent="d"+(S.t/24).toFixed(1);
+  g("rec").textContent=money(sum);
+  g("recs").textContent=n+" of 300 payments · "+att+" attempts spent";
+  g("rate").textContent=pct(sum/D.at_risk);
+  g("scrub").value=String(S.t);
 }
-
 let last=0;
 function frame(ts){
-  if(!last)last=ts;
-  const dt=(ts-last)/1000; last=ts;
-  if(S.playing){
-    S.t+=dt*(D.span_h/20)*S.speed;      // a full 14 days in ~20 seconds at 1x
-    if(S.t>=D.span_h){S.t=D.span_h;S.playing=false;syncBtn()}
-  }
-  draw(); readout();
-  requestAnimationFrame(frame);
+  if(!last)last=ts;const dt=(ts-last)/1000;last=ts;
+  if(S.playing&&ctx){S.t+=dt*(D.span_h/20)*S.speed;
+    if(S.t>=D.span_h){S.t=D.span_h;S.playing=false;syncBtn()}}
+  if(ctx){draw();readout()}
+  raf=requestAnimationFrame(frame);
 }
-function syncBtn(){
-  const b=document.getElementById("play");
-  b.textContent=S.playing?"❚❚  Pause":(S.t>=D.span_h?"↻  Replay":"▶  Play");
+function syncBtn(){const b=document.getElementById("play");if(b)
+  b.textContent=S.playing?"❚❚  Pause":(S.t>=D.span_h?"↻  Replay":"▶  Play")}
+function pageReplay(){
+  return '<div class="eyebrow">The replay</div>'+
+  '<h1>Fourteen days in <em>twenty seconds</em>.</h1>'+
+  '<p class="lede">Watch each policy spend its attempts. <strong>naive_retry_3x</strong> fires everything in '+
+  'the first six minutes and then flatlines for a fortnight. <strong>max_wait_probe</strong> waits until '+
+  'day 13.9 and arrives to almost nothing left.</p>'+
+  '<div class="stage"><div class="readout">'+
+  '<div class="ro day"><div class="k">Elapsed</div><div class="v" id="day">d0.0</div><div class="s">of 14 days</div></div>'+
+  '<div class="ro money"><div class="k">Recovered by focus arm</div><div class="v" id="rec">₹0</div>'+
+  '<div class="s" id="recs">—</div></div>'+
+  '<div class="ro"><div class="k">Rate</div><div class="v" id="rate">0.00%</div>'+
+  '<div class="s">of '+money(D.at_risk)+' at risk</div></div></div>'+
+  '<canvas id="cv" width="'+LAY.w+'" height="'+LAY.h+'" role="img" '+
+  'aria-label="Fourteen days replayed: cumulative recovery per policy, and a lamp per payment lit when recovered"></canvas>'+
+  '<div class="transport"><button id="play" class="pri">▶  Play</button>'+
+  '<button id="restart">↻  Restart</button>'+
+  '<input type="range" id="scrub" min="0" max="'+D.span_h+'" step="0.5" value="0" aria-label="Scrub through time">'+
+  '<div class="spd">'+[0.5,1,2,4].map(s=>'<button data-s="'+s+'" aria-pressed="'+(s===1)+'">'+s+'×</button>').join("")+'</div></div>'+
+  '<div class="chips" id="chips">'+D.order.map(n=>
+    '<button class="chip'+(n===S.focus?" foc":"")+'" data-arm="'+esc(n)+'" aria-pressed="'+S.on.has(n)+'"'+
+    (S.on.has(n)?' style="color:var('+HUE[n]+')"':'')+'><i class="dot"></i>'+esc(n)+'</button>').join("")+'</div>'+
+  '<p class="hint">Click an arm to show or hide its line · click again to focus it and light its lamps</p></div>';
 }
 
-/* ---------------- shell ---------------- */
-function standings(){
-  const max=Math.max(...D.order.map(n=>D.arms[n].total));
+/* ============================ PAGE 4 — ARMS ============================ */
+function timingBars(){
   return D.order.map(n=>{
-    const a=D.arms[n];
-    return '<tr><td class="nm"><i style="background:'+(S.on.has(n)?"var("+HUE[n]+")":"var(--dim)")+'"></i>'+esc(n)+'</td>'+
-      '<td>'+money(a.total)+'</td><td>'+pct(a.rate)+'</td>'+
-      '<td>'+a.count+'/'+D.payments.length+'</td><td>'+a.attempts+'</td><td>'+a.touched+'</td>'+
-      '<td style="width:150px"><div class="bar" style="width:'+(a.total/max*100)+'%;background:'+
-      (S.on.has(n)?"var("+HUE[n]+")":"var(--dim)")+'"></div></td></tr>';
+    const t=D.arms[n].timing,tot=t.in+t.early+t.late+t.nowin;
+    const seg=(v,c,lbl)=>v?'<div title="'+v+' '+lbl+'" style="width:'+(v/tot*100)+'%;background:'+c+
+      ';height:20px;display:flex;align-items:center;justify-content:center;font-size:10px;'+
+      'font-family:IBM Plex Mono,monospace;color:#0c0a08;font-weight:600">'+(v/tot>0.07?v:"")+'</div>':"";
+    return '<div style="padding:7px 0"><div class="mono" style="font-size:11.5px;color:var(--ink2);margin-bottom:4px">'+
+      esc(n)+' <span style="color:var(--ink3)">· '+tot+' attempts</span></div>'+
+      '<div style="display:flex;gap:2px;border-radius:3px;overflow:hidden">'+
+      seg(t.in,"var(--a1)","in window")+seg(t.early,"var(--a2)","too early")+
+      seg(t.late,"var(--a3)","too late")+seg(t.nowin,"var(--dim)","no window")+'</div></div>';
   }).join("");
 }
-
-function shell(){
-  document.getElementById("root").innerHTML=
-  '<div class="mast"><h1>Muhurat</h1><span class="deva">मुहूर्त</span>'+
-  '<span class="tag">seed '+D.seed+' · 300 failed payments · 110 real Razorpay error codes</span></div>'+
-  '<p class="thesis">Every failed payment has a hidden window that opens when its real blocker clears — '+
-  'an outage ending, a salary landing, a cooldown lapsing. Watch fourteen days pass and see which '+
-  'policies are there at the right moment. <em>The question is never whether to retry. It is when.</em></p>'+
-
-  '<div class="stage">'+
-  '<div class="readout">'+
-    '<div class="ro day"><div class="k">Elapsed</div><div class="v" id="day">d0.0</div>'+
-      '<div class="s">of 14 days</div></div>'+
-    '<div class="ro money"><div class="k">Recovered by focus arm</div><div class="v" id="rec">₹0</div>'+
-      '<div class="s" id="recs">—</div></div>'+
-    '<div class="ro"><div class="k">Rate</div><div class="v" id="rate">0.00%</div>'+
-      '<div class="s">of '+money(D.at_risk)+' at risk</div></div>'+
-  '</div>'+
-  '<canvas id="cv" width="'+LAY.w+'" height="'+LAY.h+'" role="img" '+
-    'aria-label="Replay of fourteen days: cumulative money recovered per policy, and a lamp per payment that lights when recovered"></canvas>'+
-  '<div class="transport">'+
-    '<button id="play" class="pri">❚❚  Pause</button>'+
-    '<button id="restart">↻  Restart</button>'+
-    '<input type="range" id="scrub" min="0" max="'+D.span_h+'" step="0.5" value="0" aria-label="Scrub through time">'+
-    '<div class="spd">'+[0.5,1,2,4].map(s=>'<button data-s="'+s+'" aria-pressed="'+(s===1)+'">'+s+'×</button>').join("")+'</div>'+
-  '</div>'+
-  '<div class="chips" id="chips">'+D.order.map(n=>
-    '<button class="chip'+(n===S.focus?" focus":"")+'" data-arm="'+esc(n)+'" aria-pressed="'+S.on.has(n)+'" '+
-    'style="color:'+(S.on.has(n)?"var("+HUE[n]+")":"")+'">'+
-    '<i class="dot"></i>'+esc(n)+'</button>').join("")+'</div>'+
-  '<p class="hint">Click an arm to show or hide its line · click again to focus it and light its lamps</p>'+
-  '</div>'+
-
+function pageArms(){
+  const max=Math.max(...D.order.map(n=>D.arms[n].total));
+  const rules=D.arms.rules_recommended,llm=D.arms.llm_recommended;
+  const delta=llm.total-rules.total;
+  return '<div class="eyebrow">The policies</div>'+
+  '<h1>Seven policies. Only the <em>timing</em> differs.</h1>'+
+  '<p class="lede">All seven ran on the same corpus with the same random streams, so any gap between them is '+
+  'their decisions — not luck. The controls are deliberately strong, because beating a strawman proves '+
+  'nothing.</p>'+
   '<div class="panel"><h2>Final standings</h2><div class="scroll"><table>'+
-  '<thead><tr><th>Arm</th><th>Recovered</th><th>Rate</th><th>Payments</th>'+
-  '<th>Gateway attempts</th><th>Customers touched</th><th></th></tr></thead>'+
-  '<tbody>'+standings()+'</tbody></table></div></div>'+
+  '<thead><tr><th>Policy</th><th>Recovered</th><th>Rate</th><th>Payments</th><th>Gateway attempts</th>'+
+  '<th>Customers touched</th><th>₹ per touch</th><th></th></tr></thead><tbody>'+
+  D.order.map(n=>{const a=D.arms[n];
+    return '<tr><td class="nm"><i style="background:var('+HUE[n]+')"></i>'+esc(n)+'</td>'+
+    '<td>'+money(a.total)+'</td><td>'+pct(a.rate)+'</td><td>'+a.count+'/300</td>'+
+    '<td>'+a.attempts+'</td><td>'+a.touched+'</td>'+
+    '<td>'+(a.touched?money(a.total/a.touched):"—")+'</td>'+
+    '<td style="width:130px"><div class="bar" style="width:'+(a.total/max*100)+'%;background:var('+HUE[n]+')"></div></td></tr>';
+  }).join("")+'</tbody></table></div>'+
+  '<div class="flag"><b>The AI adds '+money(delta)+' — '+((llm.rate-rules.rate)*100).toFixed(2)+
+  ' points over the strongest non-AI control.</b> Real, but modest, and it does not win outright: it recovers '+
+  'more on fewer gateway attempts ('+llm.attempts+' vs '+rules.attempts+') while contacting '+
+  (llm.touched-rules.touched)+' more customers, making it less than half as contact-efficient.</div></div>'+
 
-  '<footer>Every attempt you just watched was scheduled by a policy that could not see the window it '+
-  'was aiming at — thirteen assertions in the test suite prove it. The executor is simulated, so no '+
-  'live Razorpay call is made. Method and limitations in full in the repository README.</footer>';
+  '<div class="grid2">'+
+  '<div class="panel"><h2>Why each policy missed</h2>'+
+  '<p class="sub">An attempt only recovers money if it lands while a window is open. This is the whole '+
+  'benchmark in one chart.</p>'+
+  '<div style="display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:10px" class="mono">'+
+  [["var(--a1)","in window"],["var(--a2)","too early"],["var(--a3)","too late"],["var(--dim)","no window ever"]]
+    .map(c=>'<span style="font-size:11px;color:var(--ink2);display:inline-flex;align-items:center;gap:6px">'+
+    '<i style="width:9px;height:9px;border-radius:2px;background:'+c[0]+';display:inline-block"></i>'+c[1]+'</span>').join("")+
+  '</div>'+timingBars()+'</div>'+
 
-  C=document.getElementById("cv");
-  const dpr=Math.min(2,window.devicePixelRatio||1);
-  C.width=LAY.w*dpr; C.height=LAY.h*dpr;
-  C.style.aspectRatio=LAY.w+" / "+LAY.h;
-  ctx=C.getContext("2d"); ctx.scale(dpr,dpr);
-  wire();
+  '<div class="panel"><h2>What each one does</h2>'+
+  '<div class="step"><span class="stepnum" style="color:var(--a6)">◆</span><div><h3>naive_retry_3x</h3>'+
+  '<p>Retry everything, three times, at once. Reach: <b>six minutes</b>. The floor.</p></div></div>'+
+  '<div class="step"><span class="stepnum" style="color:var(--a5)">◆</span><div><h3>backoff_skip</h3>'+
+  '<p>Exponential backoff, skip what can never clear. Reach: <b>21 hours</b> — structurally unable to reach '+
+  'a payday. What a competent engineer builds first.</p></div></div>'+
+  '<div class="step"><span class="stepnum" style="color:var(--a3)">◆</span><div><h3>rules_recommended</h3>'+
+  '<p>Follows a hand-written table of '+D.rules_count+' codes, with per-reason waits and customer contact. '+
+  '<b>The real bar.</b></p></div></div>'+
+  '<div class="step"><span class="stepnum" style="color:var(--a1)">◆</span><div><h3>llm_recommended</h3>'+
+  '<p>Identical policy; only the classifier differs. An LLM places the '+D.tail.codes+' codes the table '+
+  'cannot, so the gap is attributable to the model alone.</p></div></div>'+
+  '<div class="step"><span class="stepnum" style="color:var(--a2)">◆</span><div><h3>max_wait_probe</h3>'+
+  '<p>One attempt at day 13.9. <b>It exists to lose.</b> If it ever wins, the build fails.</p></div></div>'+
+  '</div></div>';
 }
 
-function wire(){
-  document.getElementById("play").onclick=()=>{
-    if(S.t>=D.span_h)S.t=0;
-    S.playing=!S.playing; syncBtn();
+/* ============================ PAGE 5 — INTEGRITY ============================ */
+const CHECKS=[["L1","no window-shaped field on the visible record"],
+["L2","no window-shaped key at any depth in the corpus"],
+["L3","no visible value equals a delayed window boundary"],
+["L4","object-graph walk from policy inputs reaches no truth"],
+["L5","only the executor and reporters import ground truth"],
+["L5a","policies and classifiers can never be whitelisted"],
+["L6","no diagnosis field leaks a boundary, free text included"],
+["L7","no visible categorical field determines the answer"],
+["L8","adversarial getattr probe over ~40 names finds nothing"],
+["L9","the LLM prompt leaks no window, amount or timestamp"],
+["L10","every whitelisted field actually reaches the prompt"],
+["L11","cache key depends on the reason, never the payment"],
+["L12","all 51 cached verdicts record their provenance"],
+["L13","every LLM diagnosis is a rule hit or a cached verdict"]];
+function sensTable(){
+  if(!D.sensitivity)return'<p class="sub">Run <span class="mono">scripts.sensitivity --json</span> to populate this.</p>';
+  const sc=D.sensitivity.scenarios;
+  const wins=sc.filter(s=>s.llm_wins).length,probe=sc.filter(s=>s.probe_loses).length;
+  return '<div style="display:flex;gap:26px;flex-wrap:wrap;margin-bottom:14px">'+
+   '<div><div class="k mono" style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)">Probe never wins</div>'+
+   '<div style="font-size:25px;font-weight:600;color:var(--good)">'+probe+' / '+sc.length+'</div></div>'+
+   '<div><div class="k mono" style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)">LLM beats rules</div>'+
+   '<div style="font-size:25px;font-weight:600;color:var(--ember)">'+wins+' / '+sc.length+'</div></div></div>'+
+   '<div class="scroll"><table><thead><tr><th>Scenario</th><th>llm</th><th>rules</th><th>Δ</th><th>Holds</th></tr></thead><tbody>'+
+   sc.map(s=>{const d=s.scores.llm_recommended-s.scores.rules_recommended;
+     return '<tr><td class="mono" style="font-size:11.5px">'+esc(s.label)+'</td>'+
+     '<td>'+lakh(s.scores.llm_recommended)+'</td><td>'+lakh(s.scores.rules_recommended)+'</td>'+
+     '<td style="color:'+(d>=0?"var(--good)":"var(--ember)")+'">'+(d>=0?"+":"")+lakh(Math.abs(d)).replace("₹","₹")+'</td>'+
+     '<td class="mono" style="color:'+(s.llm_wins?"var(--good)":"var(--ember)")+'">'+(s.llm_wins?"yes":"NO")+'</td></tr>';
+   }).join("")+'</tbody></table></div>';
+}
+function pageIntegrity(){
+  const probe=D.arms.max_wait_probe;
+  const totalFix=D.fixes.reduce((a,f)=>a+f.paise,0);
+  return '<div class="eyebrow">Integrity</div>'+
+  '<h1>The benchmark is built so <em>we</em> cannot cheat either.</h1>'+
+  '<p class="lede">If a policy could read the hidden windows, every number here would be meaningless. So the '+
+  'assertions are written to be adversarial rather than reassuring — and they caught us three times.</p>'+
+
+  '<div class="panel"><h2>Three times, the &ldquo;AI headroom&rdquo; was our own bug</h2>'+
+  '<p class="sub">Each was found by diffing every policy against a perfect-knowledge oracle, and each was '+
+  'fixed <b>before</b> the LLM was measured — making the control stronger and the final AI number smaller.</p>'+
+  D.fixes.map(f=>'<div class="fixrow"><div class="amt">'+lakh(f.paise)+'</div>'+
+    '<div style="flex:1"><div class="what">'+esc(f.what)+'</div>'+
+    '<div class="note">'+esc(f.note)+'</div></div><span class="kind">'+esc(f.kind)+'</span></div>').join("")+
+  '<div class="flag"><b>'+money(totalFix)+' the AI arm would otherwise have banked without inferring '+
+  'anything.</b> The worst was the fallback: escalating every unmapped code made the whole tail score 0.0% '+
+  'and look like a gap only AI could close.</div></div>'+
+
+  '<div class="grid2">'+
+  '<div class="panel"><h2>The degeneracy probe</h2>'+
+  '<p class="sub">If windows only closed at a fixed horizon, one attempt just before it would land inside '+
+  '<i>every</i> window and beat everything with zero inference.</p>'+
+  '<div style="display:flex;gap:26px;flex-wrap:wrap;margin:14px 0">'+
+  '<div><div class="mono" style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)">In-window attempts</div>'+
+  '<div style="font-size:25px;font-weight:600;color:var(--flame)">'+probe.timing.in+'</div>'+
+  '<div class="mono" style="font-size:11px;color:var(--ink3)">more than most arms</div></div>'+
+  '<div><div class="mono" style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)">Final position</div>'+
+  '<div style="font-size:25px;font-weight:600;color:var(--ember)">last</div>'+
+  '<div class="mono" style="font-size:11px;color:var(--ink3)">'+pct(probe.rate)+' recovered</div></div></div>'+
+  '<p class="sub">It lands in more windows than almost anything else and still finishes last, because '+
+  'attrition means a 13.9-day-old recovery keeps only a quarter of its value. <b>The build fails if it ever '+
+  'wins.</b></p></div>'+
+
+  '<div class="panel"><h2>Thirteen leak assertions</h2>'+
+  '<p class="sub"><i>Inferring</i> a window from semantics is the skill under test. <i>Reading</i> a boundary '+
+  'off a field is cheating. These test the second without forbidding the first.</p>'+
+  '<div class="checks">'+CHECKS.map(c=>'<div class="ck"><i>✓</i><span><code>'+c[0]+'</code> '+c[1]+'</span></div>').join("")+'</div>'+
+  '</div></div>'+
+
+  '<div class="panel"><h2>Sensitivity — does the ranking survive our assumptions being wrong?</h2>'+
+  '<p class="sub">Every world constant perturbed by ±40%, one at a time and jointly. One claim holds '+
+  'everywhere; the other does not, and that is reported rather than hidden.</p>'+
+  sensTable()+
+  '<div class="flag" style="border-left-color:var(--ember)"><b>The LLM&rsquo;s advantage is conditional, not '+
+  'robust.</b> It inverts when the retry channel is materially weaker than assumed. The degeneracy '+
+  'guarantee, by contrast, holds under every perturbation tested.</div></div>';
+}
+
+/* ============================ ROUTER ============================ */
+const RENDER={problem:pageProblem,window:pageWindow,replay:pageReplay,arms:pageArms,integrity:pageIntegrity};
+function route(){
+  const id=(location.hash||"#problem").slice(1);
+  const page=RENDER[id]?id:"problem";
+  ctx=null;
+  document.getElementById("root").innerHTML='<div class="page">'+RENDER[page]()+
+    '<footer>Seed '+D.seed+' · 300 failed payments built from '+D.codes_total+' real published Razorpay error '+
+    'codes · 88 assertions passing. The executor is simulated, so every rupee is modelled rather than '+
+    'settled. Method and limitations in full in the repository README.</footer></div>';
+  document.querySelectorAll("#nav a").forEach(a=>
+    a.setAttribute("aria-current",a.dataset.p===page?"page":"false"));
+  if(page==="replay")mountReplay();
+  if(page==="window")mountWindow();
+  window.scrollTo({top:0,behavior:"instant"});
+}
+function mountWindow(){
+  const sl=document.getElementById("wslide");
+  sl.oninput=e=>{winT=+e.target.value;
+    const v=windowViz();
+    document.getElementById("wviz").innerHTML=v.svg;
+    const box=sl.nextElementSibling;
+    box.innerHTML='retry at <b style="color:var(--ink)">day '+(winT/24).toFixed(1)+'</b> → success '+
+      '<b style="color:'+(v.inside?"var(--hot)":"var(--ember)")+'">'+pct1(v.p)+'</b>';
+    document.querySelector(".flag").innerHTML=v.inside
+      ? '<b>Inside the window.</b> But you still lose value to attrition: waiting '+(winT/24).toFixed(1)+
+        ' days costs '+pct1(1-Math.exp(-0.10*(winT/24)))+' of what an instant recovery would have been worth. '+
+        'Being right late is worth far less than being right early.'
+      : '<b>Too early.</b> The account is still empty, so this attempt is near-worthless — and it is not free: '+
+        'it costs a gateway attempt and, on some rails, a worse risk score.';
   };
+}
+function mountReplay(){
+  const C=document.getElementById("cv");
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  C.width=LAY.w*dpr;C.height=LAY.h*dpr;C.style.aspectRatio=LAY.w+" / "+LAY.h;
+  ctx=C.getContext("2d");ctx.scale(dpr,dpr);
+  document.getElementById("play").onclick=()=>{if(S.t>=D.span_h)S.t=0;S.playing=!S.playing;syncBtn()};
   document.getElementById("restart").onclick=()=>{S.t=0;S.playing=true;syncBtn()};
   document.getElementById("scrub").oninput=e=>{S.t=+e.target.value;S.playing=false;syncBtn()};
-  document.querySelectorAll(".spd button").forEach(b=>b.onclick=()=>{
-    S.speed=+b.dataset.s;
-    document.querySelectorAll(".spd button").forEach(o=>o.setAttribute("aria-pressed",String(o===b)));
-  });
+  document.querySelectorAll(".spd button").forEach(b=>b.onclick=()=>{S.speed=+b.dataset.s;
+    document.querySelectorAll(".spd button").forEach(o=>o.setAttribute("aria-pressed",String(o===b)))});
   document.querySelectorAll("#chips .chip").forEach(b=>b.onclick=()=>{
     const n=b.dataset.arm;
     if(!S.on.has(n)){S.on.add(n);S.focus=n}
     else if(S.focus!==n){S.focus=n}
-    else{ if(S.on.size>1){S.on.delete(n); S.focus=[...S.on][0];} }
-    refreshChips();
+    else if(S.on.size>1){S.on.delete(n);S.focus=[...S.on][0]}
+    document.querySelectorAll("#chips .chip").forEach(c=>{
+      const m=c.dataset.arm,on=S.on.has(m);
+      c.setAttribute("aria-pressed",String(on));
+      c.style.color=on?"var("+HUE[m]+")":"";
+      c.classList.toggle("foc",m===S.focus)});
   });
+  // Show the finished state, then rewind — a still frame is never an empty chart.
+  S.t=D.span_h;draw();readout();
+  setTimeout(()=>{S.t=0;S.playing=true;syncBtn()},700);
 }
-function refreshChips(){
-  document.querySelectorAll("#chips .chip").forEach(b=>{
-    const n=b.dataset.arm, on=S.on.has(n);
-    b.setAttribute("aria-pressed",String(on));
-    b.style.color=on?"var("+HUE[n]+")":"";
-    b.classList.toggle("focus",n===S.focus);
-  });
-  document.querySelector("tbody").innerHTML=standings();
-}
-
 function boot(d){
-  D=d;
-  D.order.forEach((n,i)=>HUE[n]=SLOTS[i%SLOTS.length]);
+  D=d;D.order.forEach((n,i)=>HUE[n]=SLOTS[i%SLOTS.length]);
   if(!D.arms[S.focus])S.focus=D.order[0];
-  S.on=new Set(DEFAULT_ON.filter(n=>D.arms[n]));
-  if(!S.on.size)S.on=new Set([D.order[0]]);
-  shell();
-  // Show the finished state first, then rewind and play, so a still frame or a
-  // thumbnail is never an empty chart.
-  S.t=D.span_h; draw(); readout();
-  setTimeout(()=>{S.t=0;S.playing=true;syncBtn();},900);
-  requestAnimationFrame(frame);
+  S.on=new Set(DEFAULT_ON.filter(n=>D.arms[n]));if(!S.on.size)S.on=new Set([D.order[0]]);
+  document.getElementById("nav").innerHTML=PAGES.map(p=>
+    '<a href="#'+p[0]+'" data-p="'+p[0]+'">'+p[1]+'</a>').join("");
+  window.addEventListener("hashchange",route);
+  route();
+  raf=requestAnimationFrame(frame);
 }
-
 fetch("/api/replay").then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);return r.json()}).then(boot)
  .catch(e=>{document.getElementById("root").innerHTML=
-  '<div class="err"><p>Could not load the replay ('+esc(e.message)+').</p>'+
+  '<div class="err"><p>Could not load results ('+esc(e.message)+').</p>'+
   '<p class="mono" style="font-size:12px">python -m scripts.run_baseline &amp;&amp; python -m scripts.evaluate &amp;&amp; python -m scripts.export_replay</p></div>'});
 </script>
 </body>
