@@ -158,9 +158,10 @@ const DEFAULT_ON=["naive_retry_3x","rules_recommended","llm_recommended"];
 const S={on:new Set(DEFAULT_ON),focus:"llm_recommended",t:0,playing:false,speed:1};
 
 const PAGES=[
-  ["problem","The problem"],["window","The window"],["replay","The replay"],
-  ["arms","The policies"],["integrity","Integrity"]
+  ["problem","The problem"],["window","The window"],["advisor","Advisor"],
+  ["replay","The replay"],["arms","The policies"],["integrity","Integrity"]
 ];
+let ADV=null, ADV_REASON="insufficient_funds", ADV_PRIOR=0;
 
 /* ============================ PAGE 1 — PROBLEM ============================ */
 function classBars(){
@@ -561,8 +562,112 @@ function pageIntegrity(){
   'guarantee, by contrast, holds under every perturbation tested.</div></div>';
 }
 
+/* ============================ PAGE — ADVISOR ============================ */
+const ALL_REASONS=["insufficient_funds","bank_technical_error","card_expired","incorrect_otp",
+"gateway_technical_error","payment_risk_check_failed","invalid_vpa","vpa_resolution_failed",
+"mandate_creation_failed","otp_attempts_exceeded","transaction_daily_limit_exceeded",
+"order_already_paid","deemed_transaction","debit_instrument_blocked","psp_app_not_supported",
+"card_declined","payment_timed_out","international_transaction_not_allowed","credit_limit_exceeded",
+"merchant_not_activated","collect_request_pending","beneficiary_account_dormant"];
+
+function adviceCard(a){
+  if(!a)return '<div class="panel"><p class="sub">Pick an error code to get a decision.</p></div>';
+  const llm=a.decided_by.indexOf("LLM")===0;
+  const when=a.retry_at?new Date(a.retry_at):null;
+  return '<div class="panel" style="border-color:var(--edge2)">'+
+   '<div style="display:flex;flex-wrap:wrap;gap:10px 20px;align-items:baseline;margin-bottom:6px">'+
+   '<div style="font-family:Instrument Serif,Georgia,serif;font-size:27px;color:var(--hot)">'+esc(a.verdict)+'</div>'+
+   '<span class="kind" style="border-color:'+(llm?"var(--a1)":"var(--edge2)")+';color:'+(llm?"var(--a1)":"var(--ink3)")+'">'+
+   esc(a.decided_by)+(a.rule_id?" · "+esc(a.rule_id):"")+'</span>'+
+   '<span class="kind">'+esc(a.failure_class)+'</span>'+
+   '<span class="kind" style="color:'+(a.retriable?"var(--good)":"var(--ember)")+'">'+
+   (a.retriable?"retriable":"not retriable on this rail")+'</span></div>'+
+   '<p class="sub" style="margin-bottom:16px">'+esc(a.why)+'</p>'+
+
+   '<div class="strip" style="margin-bottom:18px">'+
+   '<div class="cell f"><div class="k">Action</div><div class="v" style="font-size:15px;font-family:IBM Plex Mono,monospace">'+
+   esc(a.action)+'</div><div class="n">from the '+(llm?"model":"rules table")+'</div></div>'+
+   '<div class="cell h"><div class="k">Retry</div><div class="v" style="font-size:19px">'+esc(a.retry_in_words)+'</div>'+
+   '<div class="n">'+(when?esc(when.toLocaleString("en-IN",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})):"nothing to schedule")+'</div></div>'+
+   '<div class="cell"><div class="k">Contacts customer</div><div class="v" style="font-size:19px;color:'+
+   (a.contacts_customer?"var(--ember)":"var(--good)")+'">'+(a.contacts_customer?"yes":"no")+'</div>'+
+   '<div class="n">'+(a.contacts_customer?"costs goodwill":"silent recovery")+'</div></div>'+
+   '<div class="cell"><div class="k">Confidence</div><div class="v" style="font-size:19px">'+a.confidence.toFixed(2)+'</div>'+
+   '<div class="n">'+(a.confidence>=0.9?"definitional":"model estimate")+'</div></div></div>'+
+
+   '<div class="grid2">'+
+   '<div><h2>For the merchant</h2>'+
+   a.merchant_steps.map(function(x,i){return '<div class="step" style="padding:9px 0"><span class="stepnum" style="font-size:20px">'+
+     (i+1)+'</span><div><p style="margin:0">'+esc(x)+'</p></div></div>'}).join("")+
+   '<div style="margin-top:14px"><div class="mono" style="font-size:9.5px;letter-spacing:.12em;'+
+   'text-transform:uppercase;color:var(--ember);margin-bottom:6px">Do not</div>'+
+   a.avoid.map(function(x){return '<div class="ck" style="align-items:flex-start"><i style="color:var(--ember)">×</i>'+
+     '<span>'+esc(x)+'</span></div>'}).join("")+'</div></div>'+
+
+   '<div><h2>For the customer</h2>'+
+   (a.customer_message
+     ? '<div style="background:var(--night2);border:1px solid var(--edge);border-radius:5px;padding:15px 17px">'+
+       '<div class="mono" style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)">Subject</div>'+
+       '<div style="font-weight:600;margin:3px 0 12px">'+esc(a.customer_subject)+'</div>'+
+       '<div class="mono" style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)">Message</div>'+
+       '<p style="margin:4px 0 0;color:var(--ink2);font-size:13.5px">'+esc(a.customer_message)+'</p></div>'+
+       (a.contacts_customer
+         ? '<p class="sub" style="margin-top:12px;font-size:12.5px">This action spends a <b>customer contact</b>. '+
+           'The benchmark charges for it — recovering more by messaging everybody is not a better system. Send once.</p>'
+         : '<p class="sub" style="margin-top:12px;font-size:12.5px">Informational only. Recovery happens without '+
+           'asking the customer for anything.</p>')
+     : '<div class="flag" style="margin:0"><b>Say nothing.</b> This is not the customer&rsquo;s problem to solve, '+
+       'and messaging them about it would only cause confusion.</div>')+
+   '</div></div>'+
+
+   '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--edge)">'+
+   '<div class="mono" style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:5px">Diagnosis trail</div>'+
+   '<p class="sub mono" style="font-size:11.5px;margin:0">'+esc(a.diagnosis_note)+'</p></div></div>';
+}
+
+function pageAdvisor(){
+  return '<div class="eyebrow">Advisor</div>'+
+  '<h1>A payment just failed. <em>Now what?</em></h1>'+
+  '<p class="lede">Give it the error code and it returns a decision: what went wrong, whether it can be '+
+  'recovered at all, <strong>when</strong> to try, and what to say to the customer. This is the winning '+
+  'policy with a front door on it — it sees only what the benchmark let it see.</p>'+
+  '<div class="panel"><h2>The failed payment</h2>'+
+  '<div class="transport" style="margin-top:0">'+
+  '<input id="areason" list="rlist" value="'+esc(ADV_REASON)+'" placeholder="e.g. insufficient_funds" '+
+  'style="flex:1;min-width:240px;font-family:IBM Plex Mono,monospace;font-size:13px;padding:8px 11px;'+
+  'border:1px solid var(--edge2);border-radius:3px;background:var(--night2);color:var(--ink)">'+
+  '<datalist id="rlist">'+ALL_REASONS.map(function(r){return '<option value="'+esc(r)+'">'}).join("")+'</datalist>'+
+  '<label class="mono" style="font-size:11px;color:var(--ink3)">prior failures</label>'+
+  '<select id="aprior" style="font-family:IBM Plex Mono,monospace;font-size:12px;padding:7px 9px;'+
+  'border:1px solid var(--edge2);border-radius:3px;background:var(--night2);color:var(--ink)">'+
+  [0,1,2,3].map(function(n){return '<option value="'+n+'"'+(n===ADV_PRIOR?" selected":"")+'>'+n+'</option>'}).join("")+'</select>'+
+  '<button id="aask" class="pri">Advise</button></div>'+
+  '<p class="hint">'+ALL_REASONS.length+' common codes in the picker · any of Razorpay’s 110 published '+
+  'reasons works · codes outside the rules table are answered by the model</p></div>'+
+  '<div id="aout">'+adviceCard(ADV)+'</div>';
+}
+
+function mountAdvisor(){
+  const go=function(){
+    const r=document.getElementById("areason").value.trim();
+    ADV_PRIOR=+document.getElementById("aprior").value;
+    if(!r)return;
+    ADV_REASON=r;
+    document.getElementById("aout").innerHTML='<div class="panel"><p class="sub mono">Diagnosing '+esc(r)+'…</p></div>';
+    fetch("/api/advise?reason="+encodeURIComponent(r)+"&prior_attempts="+ADV_PRIOR)
+      .then(function(x){if(!x.ok)throw new Error("HTTP "+x.status);return x.json()})
+      .then(function(a){ADV=a;document.getElementById("aout").innerHTML=adviceCard(a);mountAdvisor()})
+      .catch(function(e){document.getElementById("aout").innerHTML=
+        '<div class="panel"><p class="sub">Could not get advice ('+esc(e.message)+').</p></div>'});
+  };
+  document.getElementById("aask").onclick=go;
+  document.getElementById("areason").onkeydown=function(e){if(e.key==="Enter")go()};
+  document.getElementById("aprior").onchange=go;
+  if(!ADV)go();
+}
+
 /* ============================ ROUTER ============================ */
-const RENDER={problem:pageProblem,window:pageWindow,replay:pageReplay,arms:pageArms,integrity:pageIntegrity};
+const RENDER={problem:pageProblem,window:pageWindow,advisor:pageAdvisor,replay:pageReplay,arms:pageArms,integrity:pageIntegrity};
 function route(){
   const id=(location.hash||"#problem").slice(1);
   const page=RENDER[id]?id:"problem";
@@ -575,6 +680,7 @@ function route(){
     a.setAttribute("aria-current",a.dataset.p===page?"page":"false"));
   if(page==="replay")mountReplay();
   if(page==="window")mountWindow();
+  if(page==="advisor")mountAdvisor();
   window.scrollTo({top:0,behavior:"instant"});
 }
 function mountWindow(){

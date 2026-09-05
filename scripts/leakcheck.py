@@ -56,6 +56,11 @@ TRUTH_IMPORT_WHITELIST = {
     # which is baked into the windows at generation time. It runs arms but is
     # never itself a classifier or a policy.
     "scripts/sensitivity.py",
+    # Post-hoc exporters. They flatten a finished run for the dashboard, and
+    # like evaluate.py they run after every arm is done. L5a still bars the case
+    # that matters -- a policy or classifier reading the answers.
+    "scripts/export_explorer.py",
+    "scripts/export_replay.py",
 }
 
 #: Directories that may NEVER be whitelisted, whatever the list above says.

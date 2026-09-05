@@ -33,6 +33,31 @@ _CHANNEL = {
 }
 
 
+def _all_advice() -> dict:
+    """Run the advisor over every published Razorpay reason, once."""
+    import csv as _csv
+
+    from app.advisor import advise
+    from app.diagnosis.llm_classifier import LLMClassifier
+    from app.models import RazorpayError
+
+    ref = ROOT / "data" / "reference" / "razorpay_error_reasons.csv"
+    seen: dict[str, str] = {}
+    with ref.open(encoding="utf-8", newline="") as fh:
+        for row in _csv.DictReader(fh):
+            r = (row.get("Reason") or "").strip()
+            if r and r not in seen:
+                seen[r] = (row.get("Explanation") or "").strip()
+
+    clf = LLMClassifier(allow_api=False, match_by_reason=True)
+    out = {}
+    for reason, desc in seen.items():
+        err = RazorpayError(code="BAD_REQUEST_ERROR", description=desc, reason=reason,
+                            source="issuer_bank", step="payment_authorization")
+        out[reason] = advise(err, clf).to_dict()
+    return out
+
+
 def main() -> None:
     manifest = json.loads((RUNS / "latest.json").read_text(encoding="utf-8"))
     summary = json.loads((RUNS / "summary.json").read_text(encoding="utf-8"))
@@ -137,6 +162,9 @@ def main() -> None:
                              if a["arm"] == "rules_recommended")["by_class"].items()
         },
         "sensitivity": sensitivity,
+        # Precomputed advice for every published reason, so the standalone build
+        # of the dashboard answers offline. Same code path as /api/advise.
+        "advice": _all_advice(),
         # Control defects found by diffing arms against the oracle ceiling, and
         # fixed BEFORE the LLM was measured. Each was money the AI arm would
         # otherwise have banked without inferring anything.

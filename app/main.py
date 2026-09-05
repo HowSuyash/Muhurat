@@ -17,10 +17,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 
+from app.advisor import advise, known_reasons
 from app.diagnosis.classifier import RulesClassifier
+from app.models import RazorpayError
 from app.settings import get_settings
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -83,6 +85,52 @@ def replay() -> JSONResponse:
             detail="No replay data yet. Run: python -m scripts.export_replay",
         )
     return JSONResponse(json.loads(REPLAY_PATH.read_text(encoding="utf-8")))
+
+
+#: One classifier, built once. Rules first; the LLM only sees codes the table
+#: cannot place, and answers come from the committed cache, so /api/advise costs
+#: nothing and works offline.
+_ADVISOR_CLASSIFIER = None
+
+
+def _classifier():
+    global _ADVISOR_CLASSIFIER
+    if _ADVISOR_CLASSIFIER is None:
+        from app.diagnosis.llm_classifier import LLMClassifier
+
+        _ADVISOR_CLASSIFIER = LLMClassifier(allow_api=False, match_by_reason=True)
+    return _ADVISOR_CLASSIFIER
+
+
+@app.get("/api/reasons")
+def reasons() -> JSONResponse:
+    """Error reasons the rules table covers, for the advisor's picker."""
+    return JSONResponse({"reasons": known_reasons()})
+
+
+@app.get("/api/advise")
+def api_advise(
+    reason: str = Query(..., description="Razorpay error.reason, e.g. insufficient_funds"),
+    description: str = Query("", description="the gateway message, if you have it"),
+    code: str = Query("BAD_REQUEST_ERROR"),
+    source: str = Query("issuer_bank"),
+    step: str = Query("payment_authorization"),
+    prior_attempts: int = Query(0, ge=0, le=10),
+) -> JSONResponse:
+    """What to do about one failed payment, and when.
+
+    Uses only what a policy sees -- the error object, the rules table, and the
+    LLM classifier for unmapped codes. It never reads the hidden windows, so its
+    advice is exactly the behaviour the benchmark measured.
+    """
+    if not reason.strip():
+        raise HTTPException(status_code=400, detail="reason is required")
+    err = RazorpayError(
+        code=code, description=description, reason=reason.strip(),
+        source=source, step=step,
+    )
+    a = advise(err, _classifier(), prior_attempts=prior_attempts)
+    return JSONResponse(a.to_dict())
 
 
 @app.get("/health")

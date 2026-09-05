@@ -200,6 +200,37 @@ class LLMCache:
     def __len__(self) -> int:
         return len(list(self.dir.glob("*.json")))
 
+    def by_reason(self) -> dict[str, LLMVerdict]:
+        """Index the cache by error reason instead of by prompt hash.
+
+        The benchmark keys on a SHA-256 of the exact prompt, which is right for
+        reproducibility: a changed prompt must miss. But an interactive caller
+        types a reason without the corpus's exact description, source and step,
+        so it would miss every time and silently fall back to rules.
+
+        Since each cache entry records the reason it answers, indexing by that
+        is the same data under a different key -- not a looser guarantee. Used
+        only by app/advisor.py; the benchmark path is untouched.
+        """
+        out: dict[str, LLMVerdict] = {}
+        for f in self.dir.glob("*.json"):
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+                r = d.get("reason")
+                if not r:
+                    continue
+                out[r] = LLMVerdict(
+                    failure_class=d["failure_class"],
+                    recommended_action=d["recommended_action"],
+                    retriable=bool(d["retriable"]),
+                    min_wait_hours=float(d["min_wait_hours"]),
+                    confidence=float(d["confidence"]),
+                    reasoning=d.get("reasoning", ""),
+                )
+            except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+                continue
+        return out
+
 
 class LLMClassifier:
     """Rules first, model only for what the rules cannot place.
@@ -217,6 +248,7 @@ class LLMClassifier:
         *,
         allow_api: bool = False,
         min_confidence: float = MIN_CONFIDENCE,
+        match_by_reason: bool = False,
     ) -> None:
         self._rules = rules if rules is not None else RulesClassifier()
         self._cache = cache if cache is not None else LLMCache()
@@ -226,6 +258,8 @@ class LLMClassifier:
         # Counters so the run can report exactly what the model contributed.
         self.stats = {"rules_hit": 0, "cache_hit": 0, "api_call": 0,
                       "low_confidence": 0, "error_fallback": 0, "cache_miss": 0}
+        # Off by default so the benchmark keeps its strict prompt-hash keying.
+        self._by_reason = self._cache.by_reason() if match_by_reason else None
 
     @property
     def table(self):
@@ -243,6 +277,15 @@ class LLMClassifier:
         prompt = build_prompt(error)
         key = cache_key(prompt)
         verdict = self._cache.get(key)
+
+        # Interactive callers (app/advisor.py) supply a reason without the
+        # corpus's exact prose, so the prompt hash misses. Fall back to the
+        # reason index, which is the same cached answer under another key.
+        if verdict is None and self._by_reason is not None:
+            verdict = self._by_reason.get(error.reason)
+            if verdict is not None:
+                self.stats["cache_hit"] += 1
+                return self._from_verdict(verdict, error)
 
         if verdict is not None:
             self.stats["cache_hit"] += 1
@@ -279,6 +322,29 @@ class LLMClassifier:
             classifier_name=self.name,
             classifier_version=self.version,
             rule_id=None,  # no rule fired; the justification is in `reason`
+        )
+
+    def _from_verdict(self, verdict: LLMVerdict, error: RazorpayError) -> Diagnosis:
+        """Build a Diagnosis from a cached verdict, applying the confidence floor."""
+        if verdict.confidence < self._min_confidence:
+            self.stats["low_confidence"] += 1
+            return self._fallback(self._rules.classify(error),
+                                  f"model confidence {verdict.confidence:.2f} too low")
+        try:
+            fc = FailureClass(verdict.failure_class)
+            act = RecoveryAction(verdict.recommended_action)
+        except ValueError:
+            return self._fallback(self._rules.classify(error), "unknown class or action")
+        return Diagnosis(
+            failure_class=fc,
+            recommended_action=act,
+            retriable=verdict.retriable,
+            min_wait_hours=max(0.0, verdict.min_wait_hours),
+            confidence=verdict.confidence,
+            reason=f"[LLM] reason={error.reason!r} unmapped by the rules table. {verdict.reasoning}",
+            classifier_name=self.name,
+            classifier_version=self.version,
+            rule_id=None,
         )
 
     def _fallback(self, base: Diagnosis, why: str) -> Diagnosis:
