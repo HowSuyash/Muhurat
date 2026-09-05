@@ -1,0 +1,912 @@
+# ============================================================================
+# The world model -- when a failed payment can actually be recovered.
+#
+# THE INTEGRITY CLAIM
+# -------------------
+# No number in this file is keyed by failure class. There are exactly five
+# tunable constants, all global, all channel-level. Every difference between
+# failure classes comes from WHEN THE WINDOW OPENS, which is derived from the
+# failure's own semantics -- not from a coefficient chosen to make some arm win.
+#
+# This replaces config/outcome_model.toml, where P(success) was keyed on
+# (failure_class, action). That design made retry TIMING invisible to the eval,
+# which meant the one place real intelligence lives could not be measured. It is
+# kept as a legacy executor so the two can be compared and the switch defended.
+#
+# scripts/selfcheck.py asserts this file contains no failure-class name.
+# ============================================================================
+
+schema_version = 1
+
+# ---------------------------------------------------------------------------
+# The complete set of tunable numbers. Six. All global.
+# ---------------------------------------------------------------------------
+[constants]
+
+# The blocker is gone and the attempt lands inside the window: the payment
+# clears. Not 1.0, because payments fail for uncorrelated reasons too.
+p_in_retry = 0.90
+
+# An alternate rail exists, is enabled for this customer, and they complete on
+# it. Lower than a plain retry: switching rails asks something of the customer.
+p_in_rail = 0.65
+
+# We contacted the customer and they actually acted. This is a response rate,
+# and response rates are poor. It is the reason contacting everyone is not a
+# strategy, and why the eval reports recovered-per-customer-touched.
+p_in_contact = 0.35
+
+# Attempts outside the window are not impossible, just very unlikely. This
+# softens the knife edge so a policy that misses by a minute is not treated
+# identically to one that never had a chance.
+p_out = 0.02
+
+# After this many days the customer is gone: the order is abandoned, the cart
+# is stale, the subscription lapsed. Every window closes at t0 + this.
+attrition_horizon_days = 14
+
+# Customers leak away continuously, not at a cliff. Every channel's success
+# probability is multiplied by exp(-attrition_lambda * days_since_failure).
+#
+# Without this, a hard horizon alone is degenerate: one attempt at t0 + 13.9d
+# lands inside EVERY window that exists -- gateway, outage, payday alike -- and
+# a policy that always waits 13.9 days beats every arm with zero inference.
+# That would replace "the config decides the answer" with "the horizon decides
+# the answer".
+#
+# With it, lateness is paid for. Hitting a window early beats hitting it late,
+# so estimating WHEN precisely becomes the skill under test. At 0.10/day a
+# same-hour recovery keeps ~100% of its value, one day costs ~10%, and the
+# 13.9-day degenerate strategy keeps only ~25%.
+#
+# scripts/run_baseline.py ships a MaxWaitPolicy (one attempt at t0 + 13.9d) as
+# a permanent degeneracy probe. It must lose. If it ever wins, this model is
+# broken and the eval says so immediately.
+attrition_lambda = 0.10
+
+# ---------------------------------------------------------------------------
+# Per-reason recovery semantics.
+#
+# For each Razorpay error reason, which channels can EVER recover the payment,
+# and when each opens. Delays are drawn uniformly from [min, max] hours.
+#
+#   retry   = same instrument, same rail, later
+#   rail    = move the payment to a different rail (UPI)
+#   contact = ask the customer to do something
+#
+# opens_at kinds:
+#   "immediate"   opens at t0
+#   "delay"       opens at t0 + uniform(delay_min_hours, delay_max_hours)
+#   "payday"      opens at the customer's next payday (hidden, per-customer)
+#   "outage_end"  opens when this payment's bank outage window closes
+#   "never"       the channel never opens
+# ---------------------------------------------------------------------------
+
+# ------------------------------------------------------ INSUFFICIENT FUNDS ---
+# Money arrives on a salary cycle. No amount of retrying creates it, and the
+# wait is days, not hours -- which is exactly what a backoff policy cannot reach.
+
+[reason.insufficient_funds]
+retry = "payday"
+rail = "never"          # a different rail into the same empty account
+contact = "immediate"   # a genuinely different funding source can work
+note = "Balance arrives on the salary cycle. Timing is the whole intervention."
+
+[reason.credit_limit_exceeded]
+retry = "payday"        # statement reset behaves like a payday
+rail = "never"
+contact = "immediate"
+note = "Cardless-EMI limit resets on the statement cycle."
+
+[reason.funds_blocked_by_mandate]
+retry = "delay"
+delay_min_hours = 18.0
+delay_max_hours = 36.0
+rail = "never"
+contact = "immediate"
+note = "A one-time-mandate hold releases on its own within a day or so."
+
+# ----------------------------------------------------------- BANK DOWNTIME ---
+# Opens when the outage ends. The outage is real, clustered, and shared across
+# every payment hitting that bank -- which is what makes it inferable from
+# correlated failures without ever reading the truth.
+
+[reason.bank_not_available]
+retry = "outage_end"
+rail = "immediate_if_not_upi"
+contact = "never"       # a customer cannot fix their bank being down
+note = "Issuer outage. Opens the moment the outage ends, not before."
+
+[reason.bank_technical_error]
+retry = "outage_end"
+rail = "immediate_if_not_upi"
+contact = "never"
+note = "Core Banking System fault. Same shape as any other outage."
+
+[reason.issuer_technical_error]
+retry = "outage_end"
+rail = "immediate_if_not_upi"
+contact = "never"
+note = "Issuer-side technical fault."
+
+[reason.bank_cutoff_in_progress]
+retry = "outage_end"
+rail = "immediate_if_not_upi"
+contact = "never"
+note = "Scheduled CBS cutoff -- the most predictable outage there is."
+
+[reason.psp_not_available]
+retry = "outage_end"
+rail = "never"          # already UPI
+contact = "never"
+note = "PSP downtime."
+
+[reason.upi_app_technical_error]
+retry = "outage_end"
+rail = "never"
+contact = "never"
+note = "Fault in the customer's PSP app."
+
+[reason.payment_declined_due_to_high_traffic]
+retry = "outage_end"
+rail = "immediate_if_not_upi"
+contact = "never"
+note = "TPS surge. Behaves as an outage and ends like one."
+
+# --------------------------------------------------------- GATEWAY TIMEOUT ---
+# Genuinely transient. Opens in under ten minutes and stays open. This is the
+# only class where retrying almost immediately is the correct move.
+
+[reason.gateway_technical_error]
+retry = "delay"
+delay_min_hours = 0.008   # 30 seconds
+delay_max_hours = 0.133   # 8 minutes
+rail = "immediate"
+contact = "immediate"
+note = "Transient infra fault; resolves in seconds to minutes."
+
+[reason.request_timed_out]
+retry = "delay"
+delay_min_hours = 0.008
+delay_max_hours = 0.133
+rail = "immediate"
+contact = "immediate"
+note = "No terminal state was reached; nothing was actually declined."
+
+[reason.payment_timed_out]
+retry = "delay"
+delay_min_hours = 0.008
+delay_max_hours = 0.133
+rail = "immediate"
+contact = "immediate"
+note = "Gateway returned no response."
+
+[reason.invalid_response_from_gateway]
+retry = "delay"
+delay_min_hours = 0.008
+delay_max_hours = 0.133
+rail = "immediate"
+contact = "immediate"
+note = "Malformed response, not a decline."
+
+[reason.server_error]
+retry = "delay"
+delay_min_hours = 0.008
+delay_max_hours = 0.133
+rail = "immediate"
+contact = "immediate"
+note = "Razorpay-side fault."
+
+[reason.payment_collect_request_expired]
+retry = "delay"
+delay_min_hours = 0.008
+delay_max_hours = 0.133
+rail = "immediate"
+contact = "immediate"
+note = "The collect window lapsed; re-sending costs nothing."
+
+# ------------------------------------------------------------- OTP TIMEOUT ---
+# A silent retry cannot produce an OTP. These need the customer, except
+# otp_attempts_exceeded, which needs the issuer's cooldown to lapse first.
+
+[reason.otp_expired]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+note = "Needs a fresh OTP the customer enters. No retry can manufacture one."
+
+[reason.incorrect_otp]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+note = "Customer mistyped. Re-engage, do not retry."
+
+[reason.authentication_failed]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+note = "3DS/OTP abandonment. A drop-off problem."
+
+[reason.payment_session_expired]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+note = "The checkout session died; the instrument is fine."
+
+[reason.otp_attempts_exceeded]
+retry = "delay"
+delay_min_hours = 8.0
+delay_max_hours = 24.0
+rail = "immediate"
+contact = "never"       # the card is blocked; contacting cannot help yet
+note = "Issuer temp-blocks the card. Only the cooldown lapsing helps."
+
+# ------------------------------------------------------------ EXPIRED CARD ---
+
+[reason.card_expired]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+note = "Still expired tomorrow, and the day after. Retry is pure waste."
+
+[reason.incorrect_card_expiry_date]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+note = "Wrong data on file; only the customer can correct it."
+
+# ------------------------------------------------------------ RISK DECLINE ---
+
+[reason.payment_risk_check_failed]
+retry = "never"
+rail = "never"          # risk follows the customer across rails
+contact = "never"       # escalation only; nothing automated recovers this
+note = "Genuine risk signal. Nothing in the pipeline should recover it."
+
+[reason.card_declined]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+note = "Opaque issuer refusal. It will refuse again."
+
+[reason.payment_declined]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+note = "Opaque issuer or gateway decline."
+
+[reason.international_transaction_not_allowed]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+note = "This card can never clear this transaction. A domestic rail can."
+
+# ------------------------------------------------------------- INVALID VPA ---
+# The pair that makes the point: two near-identical strings, opposite truths.
+
+[reason.invalid_vpa]
+retry = "never"
+rail = "never"          # already UPI
+contact = "immediate"
+note = "The VPA is wrong. It is equally wrong on attempt three."
+
+[reason.psp_not_registered]
+retry = "never"
+rail = "never"
+contact = "immediate"
+note = "No PSP on the device; needs a different handle."
+
+[reason.vpa_resolution_failed]
+retry = "delay"
+delay_min_hours = 0.17    # 10 minutes
+delay_max_hours = 1.5     # 90 minutes
+rail = "never"
+contact = "immediate"
+note = "NPCI resolution fault, NOT a bad VPA. Recovers on its own."
+
+# ---------------------------------------------------------- MANDATE FAILURE ---
+
+[reason.mandate_creation_failed]
+retry = "never"
+rail = "never"
+contact = "immediate"
+note = "Terminal per Razorpay's docs. Re-registration is the only path."
+
+[reason.mandate_creation_declined]
+retry = "never"
+rail = "never"
+contact = "immediate"
+note = "Declined by an entity in the chain. Terminal."
+
+[reason.mandate_creation_expired]
+retry = "never"
+rail = "never"
+contact = "immediate"
+note = "The registration window closed."
+
+[reason.mandate_creation_timeout]
+retry = "delay"
+delay_min_hours = 1.0
+delay_max_hours = 6.0
+rail = "immediate"
+contact = "immediate"
+note = "A timeout is technical, not a refusal. This one can still clear."
+
+[reason.reqauth_mandate_not_acknowledged]
+retry = "delay"
+delay_min_hours = 1.0
+delay_max_hours = 6.0
+rail = "immediate"
+contact = "immediate"
+note = "The PSP never answered -- PSP downtime, not customer refusal."
+
+# ------------------------------------------------- REASONS WITH NO RULE ROW ---
+# These are absent from config/rules.toml, so the rules classifier cannot place
+# them and falls back. Their true semantics are deliberately MIXED -- some
+# recover quickly, some never -- so the fallback bucket is not uniformly
+# anything. A classifier that guesses one behaviour for the whole bucket is
+# punished, which is precisely the gap a Day-2 LLM classifier has to close.
+
+[reason.mismatch_in_transaction_details]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+note = "Details do not reconcile. Terminal on this rail."
+
+[reason.deemed_transaction]
+retry = "delay"
+delay_min_hours = 2.0
+delay_max_hours = 12.0
+rail = "never"
+contact = "never"
+note = "Reconciliation lag. Often settles itself -- and looks terminal."
+
+[reason.collect_on_mcc_blocked]
+retry = "never"
+rail = "never"
+contact = "immediate"
+note = "MCC restriction on collect. Structural."
+
+[reason.transaction_daily_limit_exceeded]
+retry = "delay"
+delay_min_hours = 12.0
+delay_max_hours = 30.0
+rail = "immediate"
+contact = "immediate"
+note = "A daily limit resets at midnight. Reliably recoverable, just not soon."
+
+[reason.debit_instrument_blocked]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+note = "Card blocked by the customer or their bank."
+
+[reason.user_not_eligible]
+retry = "never"
+rail = "never"
+contact = "immediate"
+note = "Eligibility is a business rule, not a transient fault."
+
+# ==========================================================================
+# LONG TAIL -- generated by scripts/build_world_tail.py
+#
+# Razorpay publishes 110 distinct reasons. The head of the distribution is
+# hand-authored above with a per-reason note; these are the remainder,
+# assigned to semantic families so the reasoning is reviewable in one place
+# rather than restated 75 times. The family assignment is the claim -- a
+# panel can disagree with any single row without the mechanism changing.
+#
+# A hand-written rules table cannot cover this many codes, which is exactly
+# the argument for a classifier that generalises to codes it has not seen.
+# ==========================================================================
+
+[reason."amount_less_than_minimum_amount"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "input_invalid"
+note = "The request itself was malformed. Retrying the same request reproduces the same error."
+
+[reason."authorisation_declined_by_psp"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "terminal_decline"
+note = "An opaque refusal. It will refuse again; route around it instead of repeating the question."
+
+[reason."bank_account_invalid"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "beneficiary_bad"
+note = "The destination account cannot receive. Needs corrected details from the customer."
+
+[reason."bank_account_validation_failed"]
+retry = "delay"
+delay_min_hours = 2.0
+delay_max_hours = 12.0
+rail = "never"
+contact = "never"
+family = "reconciliation_lag"
+note = "Settlement is still in flight. Often resolves itself -- and looks terminal while it does not."
+
+[reason."bank_not_enabled"]
+retry = "never"
+rail = "never"
+contact = "never"
+family = "merchant_config"
+note = "A configuration problem on OUR side. No recovery action reaches it -- the business must fix it."
+
+[reason."beneficiary_account_does_not_exist"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "beneficiary_bad"
+note = "The destination account cannot receive. Needs corrected details from the customer."
+
+[reason."beneficiary_account_dormant"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "beneficiary_bad"
+note = "The destination account cannot receive. Needs corrected details from the customer."
+
+[reason."capture_failed"]
+retry = "delay"
+delay_min_hours = 0.008
+delay_max_hours = 0.133
+rail = "immediate"
+contact = "immediate"
+family = "transient_infra"
+note = "Transient infrastructure fault. Resolves in seconds to minutes without anyone doing anything."
+
+[reason."card_network_not_enabled"]
+retry = "never"
+rail = "never"
+contact = "never"
+family = "merchant_config"
+note = "A configuration problem on OUR side. No recovery action reaches it -- the business must fix it."
+
+[reason."card_not_enrolled"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "instrument_dead"
+note = "This instrument will never work again. Another rail or another instrument might."
+
+[reason."card_number_invalid"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "instrument_dead"
+note = "This instrument will never work again. Another rail or another instrument might."
+
+[reason."card_type_invalid"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "instrument_dead"
+note = "This instrument will never work again. Another rail or another instrument might."
+
+[reason."collect_request_pending"]
+retry = "delay"
+delay_min_hours = 2.0
+delay_max_hours = 12.0
+rail = "never"
+contact = "never"
+family = "reconciliation_lag"
+note = "Settlement is still in flight. Often resolves itself -- and looks terminal while it does not."
+
+[reason."compliance_violation"]
+retry = "never"
+rail = "never"
+contact = "never"
+family = "risk_block"
+note = "A genuine risk signal that follows the customer across rails. Nothing automated should recover it."
+
+[reason."credit_limit_expired"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "credit_facility"
+note = "A lending facility is unavailable or unapproved. Another rail can still take the payment."
+
+[reason."credit_limit_inactive"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "credit_facility"
+note = "A lending facility is unavailable or unapproved. Another rail can still take the payment."
+
+[reason."credit_limit_not_approved"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "credit_facility"
+note = "A lending facility is unavailable or unapproved. Another rail can still take the payment."
+
+[reason."credit_not_permitted"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "credit_facility"
+note = "A lending facility is unavailable or unapproved. Another rail can still take the payment."
+
+[reason."credit_failed"]
+retry = "delay"
+delay_min_hours = 2.0
+delay_max_hours = 12.0
+rail = "never"
+contact = "never"
+family = "reconciliation_lag"
+note = "Settlement is still in flight. Often resolves itself -- and looks terminal while it does not."
+
+[reason."debit_declined"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "terminal_decline"
+note = "An opaque refusal. It will refuse again; route around it instead of repeating the question."
+
+[reason."debit_instrument_inactive"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "instrument_dead"
+note = "This instrument will never work again. Another rail or another instrument might."
+
+[reason."duplicate_refund_id"]
+retry = "never"
+rail = "never"
+contact = "never"
+family = "already_settled"
+note = "There is nothing to recover: already paid, duplicate, or no such record."
+
+[reason."duplicate_request"]
+retry = "never"
+rail = "never"
+contact = "never"
+family = "already_settled"
+note = "There is nothing to recover: already paid, duplicate, or no such record."
+
+[reason."duplicate_rrn_found"]
+retry = "delay"
+delay_min_hours = 2.0
+delay_max_hours = 12.0
+rail = "never"
+contact = "never"
+family = "reconciliation_lag"
+note = "Settlement is still in flight. Often resolves itself -- and looks terminal while it does not."
+
+[reason."emi_greater_than_max_amount"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "credit_facility"
+note = "A lending facility is unavailable or unapproved. Another rail can still take the payment."
+
+[reason."emi_plan_unavailable"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "credit_facility"
+note = "A lending facility is unavailable or unapproved. Another rail can still take the payment."
+
+[reason."incorrect_atm_pin"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "auth_friction"
+note = "The customer could not get through authentication. A silent retry cannot authenticate for them."
+
+[reason."incorrect_card_details"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "auth_friction"
+note = "The customer could not get through authentication. A silent retry cannot authenticate for them."
+
+[reason."incorrect_cardholder_name"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "auth_friction"
+note = "The customer could not get through authentication. A silent retry cannot authenticate for them."
+
+[reason."incorrect_cvv"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "auth_friction"
+note = "The customer could not get through authentication. A silent retry cannot authenticate for them."
+
+[reason."incorrect_pin"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "auth_friction"
+note = "The customer could not get through authentication. A silent retry cannot authenticate for them."
+
+[reason."input_validation_failed"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "input_invalid"
+note = "The request itself was malformed. Retrying the same request reproduces the same error."
+
+[reason."invalid_amount"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "input_invalid"
+note = "The request itself was malformed. Retrying the same request reproduces the same error."
+
+[reason."invalid_currency"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "input_invalid"
+note = "The request itself was malformed. Retrying the same request reproduces the same error."
+
+[reason."invalid_device"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "input_invalid"
+note = "The request itself was malformed. Retrying the same request reproduces the same error."
+
+[reason."invalid_email"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "input_invalid"
+note = "The request itself was malformed. Retrying the same request reproduces the same error."
+
+[reason."invalid_mobile_number"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "input_invalid"
+note = "The request itself was malformed. Retrying the same request reproduces the same error."
+
+[reason."invalid_order_id"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "input_invalid"
+note = "The request itself was malformed. Retrying the same request reproduces the same error."
+
+[reason."invalid_request"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "input_invalid"
+note = "The request itself was malformed. Retrying the same request reproduces the same error."
+
+[reason."invalid_user_details"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "input_invalid"
+note = "The request itself was malformed. Retrying the same request reproduces the same error."
+
+[reason."live_mode_not_enabled"]
+retry = "never"
+rail = "never"
+contact = "never"
+family = "merchant_config"
+note = "A configuration problem on OUR side. No recovery action reaches it -- the business must fix it."
+
+[reason."mcc_amount_limit_exceeded"]
+retry = "delay"
+delay_min_hours = 12.0
+delay_max_hours = 30.0
+rail = "immediate"
+contact = "immediate"
+family = "rolling_limit"
+note = "A per-day or per-window cap. Resets at the next boundary -- reliably recoverable, just not soon."
+
+[reason."merchant_not_activated"]
+retry = "never"
+rail = "never"
+contact = "never"
+family = "merchant_config"
+note = "A configuration problem on OUR side. No recovery action reaches it -- the business must fix it."
+
+[reason."mobile_number_invalid"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "input_invalid"
+note = "The request itself was malformed. Retrying the same request reproduces the same error."
+
+[reason."order_already_paid"]
+retry = "never"
+rail = "never"
+contact = "never"
+family = "already_settled"
+note = "There is nothing to recover: already paid, duplicate, or no such record."
+
+[reason."order_payment_method_mismatch"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "input_invalid"
+note = "The request itself was malformed. Retrying the same request reproduces the same error."
+
+[reason."order_amount_mismatch"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "input_invalid"
+note = "The request itself was malformed. Retrying the same request reproduces the same error."
+
+[reason."payment_amount_tampered"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "input_invalid"
+note = "The request itself was malformed. Retrying the same request reproduces the same error."
+
+[reason."payment_cancelled"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "customer_abandoned"
+note = "The customer walked away. Re-engaging is the only route, and a cheaper rail helps."
+
+[reason."payment_failed"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "terminal_decline"
+note = "An opaque refusal. It will refuse again; route around it instead of repeating the question."
+
+[reason."payment_method_not_enabled"]
+retry = "never"
+rail = "never"
+contact = "never"
+family = "merchant_config"
+note = "A configuration problem on OUR side. No recovery action reaches it -- the business must fix it."
+
+[reason."payment_pending"]
+retry = "delay"
+delay_min_hours = 2.0
+delay_max_hours = 12.0
+rail = "never"
+contact = "never"
+family = "reconciliation_lag"
+note = "Settlement is still in flight. Often resolves itself -- and looks terminal while it does not."
+
+[reason."payment_pending_approval"]
+retry = "delay"
+delay_min_hours = 2.0
+delay_max_hours = 12.0
+rail = "never"
+contact = "never"
+family = "reconciliation_lag"
+note = "Settlement is still in flight. Often resolves itself -- and looks terminal while it does not."
+
+[reason."pin_attempts_exceeded"]
+retry = "delay"
+delay_min_hours = 8.0
+delay_max_hours = 24.0
+rail = "immediate"
+contact = "never"
+family = "auth_lockout"
+note = "Too many attempts; the issuer has locked the instrument. Only the cooldown lapsing helps."
+
+[reason."pin_not_set"]
+retry = "never"
+rail = "immediate"
+contact = "immediate"
+family = "instrument_dead"
+note = "This instrument will never work again. Another rail or another instrument might."
+
+[reason."psp_app_ not_available"]  # sic: typo is in Razorpay's file
+retry = "outage_end"
+rail = "immediate_if_not_upi"
+contact = "never"
+family = "institution_outage"
+note = "The institution is down. Clears when the outage clears; the customer cannot help."
+
+[reason."psp_app_not_supported"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "vpa_bad"
+note = "The UPI handle itself is wrong or restricted. Only a different handle from the customer helps."
+
+[reason."record_not_found"]
+retry = "never"
+rail = "never"
+contact = "never"
+family = "already_settled"
+note = "There is nothing to recover: already paid, duplicate, or no such record."
+
+[reason."recurring_payment_not_enabled"]
+retry = "never"
+rail = "never"
+contact = "never"
+family = "merchant_config"
+note = "A configuration problem on OUR side. No recovery action reaches it -- the business must fix it."
+
+[reason."refund_limit_crossed"]
+retry = "delay"
+delay_min_hours = 12.0
+delay_max_hours = 30.0
+rail = "immediate"
+contact = "immediate"
+family = "rolling_limit"
+note = "A per-day or per-window cap. Resets at the next boundary -- reliably recoverable, just not soon."
+
+[reason."transaction_daily_count_exceeded"]
+retry = "delay"
+delay_min_hours = 12.0
+delay_max_hours = 30.0
+rail = "immediate"
+contact = "immediate"
+family = "rolling_limit"
+note = "A per-day or per-window cap. Resets at the next boundary -- reliably recoverable, just not soon."
+
+[reason."transaction_limit_exceeded"]
+retry = "delay"
+delay_min_hours = 12.0
+delay_max_hours = 30.0
+rail = "immediate"
+contact = "immediate"
+family = "rolling_limit"
+note = "A per-day or per-window cap. Resets at the next boundary -- reliably recoverable, just not soon."
+
+[reason."transaction_frequency_limit_exceeded"]
+retry = "delay"
+delay_min_hours = 12.0
+delay_max_hours = 30.0
+rail = "immediate"
+contact = "immediate"
+family = "rolling_limit"
+note = "A per-day or per-window cap. Resets at the next boundary -- reliably recoverable, just not soon."
+
+[reason."transaction_on_vpa_restricted"]
+retry = "never"
+rail = "never"
+contact = "immediate"
+family = "vpa_bad"
+note = "The UPI handle itself is wrong or restricted. Only a different handle from the customer helps."
+
+[reason."upi_autopay_not_supported_on_psp"]
+retry = "never"
+rail = "never"
+contact = "never"
+family = "merchant_config"
+note = "A configuration problem on OUR side. No recovery action reaches it -- the business must fix it."
+
+[reason."upi_collect_not_enabled"]
+retry = "never"
+rail = "never"
+contact = "never"
+family = "merchant_config"
+note = "A configuration problem on OUR side. No recovery action reaches it -- the business must fix it."
+
+[reason."upi_intent_not_enabled"]
+retry = "never"
+rail = "never"
+contact = "never"
+family = "merchant_config"
+note = "A configuration problem on OUR side. No recovery action reaches it -- the business must fix it."
+
+[reason."user_not_registered_for_netbanking"]
+retry = "never"
+rail = "never"
+contact = "never"
+family = "merchant_config"
+note = "A configuration problem on OUR side. No recovery action reaches it -- the business must fix it."
+
+[reason."verification_failed"]
+retry = "delay"
+delay_min_hours = 2.0
+delay_max_hours = 12.0
+rail = "never"
+contact = "never"
+family = "reconciliation_lag"
+note = "Settlement is still in flight. Often resolves itself -- and looks terminal while it does not."

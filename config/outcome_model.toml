@@ -1,0 +1,155 @@
+# ============================================================================
+# Simulated outcome model  --  P(success | failure_class, action)
+#
+# These numbers decide every rupee this project claims to recover, so each one
+# carries the reasoning that produced it. They are informed estimates, not
+# measured data, and the README says so plainly.
+#
+# Read them as: "given a payment that failed for THIS reason, and given we take
+# THIS action, how often does the next attempt actually clear?"
+#
+# The load path (app/execution/simulated.py) bounds-checks every value to
+# [0, 1] and requires a value for every (class, action) pair, so a typo here
+# fails loudly at startup rather than silently skewing the results.
+#
+# DAY 3 (planned, not built): sensitivity sweep at +/-40% on every probability
+# below, to show the ranking of arms is robust to these assumptions.
+# ============================================================================
+
+schema_version = 1
+
+# ---------------------------------------------------------------------------
+# Global modifiers, applied on top of the base rates.
+# ---------------------------------------------------------------------------
+[modifiers]
+
+# Each pre-existing failure already on the record multiplies P(success).
+# A payment that failed twice before it even reached us is a worse bet than a
+# first-time failure, independent of the error code.
+prior_attempt_penalty = 0.90
+
+# Successive attempts within one recovery run decay: p * decay^(attempt-1).
+# Per-class, because a second GATEWAY_TIMEOUT retry is still worth real money
+# while a second EXPIRED_CARD retry is worth nothing at all.
+[modifiers.attempt_decay]
+GATEWAY_TIMEOUT    = 0.85  # transient; a second look at healthy infra still pays
+BANK_DOWNTIME      = 0.80  # outage may end between attempts
+INSUFFICIENT_FUNDS = 0.70  # balance rarely moves twice in one window
+OTP_TIMEOUT        = 0.65  # customer attention decays fast
+MANDATE_FAILURE    = 0.60  # mostly terminal states; little left to win
+RISK_DECLINE       = 0.40  # each repeat attempt actively worsens the risk score
+INVALID_VPA        = 0.40  # only the resolution-failure subset can ever clear
+EXPIRED_CARD       = 0.30  # deterministic decline; repetition is meaningless
+UNKNOWN            = 0.70  # blended default
+
+# ---------------------------------------------------------------------------
+# Base success rates.
+#
+# Actions with no attempt against the gateway (SUPPRESS_DO_NOT_RETRY,
+# ESCALATE_MANUAL_REVIEW) are 0.0 by construction: they recover nothing inside
+# this pipeline. Escalation may well recover money via a human, but that is
+# outside the automated system being measured, and counting it would flatter us.
+# ---------------------------------------------------------------------------
+
+[base.GATEWAY_TIMEOUT]
+RETRY_NOW              = 0.62  # transient infra fault; the retry usually lands on a healthy node
+RETRY_AFTER_BACKOFF    = 0.68  # marginally better than immediate, but the delay costs conversion
+RETRY_AT_PAYDAY        = 0.60  # works, but waiting 72h for a 30-second problem is absurd
+SWITCH_RAIL_TO_UPI     = 0.55  # fine, though it discards a perfectly good instrument
+REQUEST_NEW_INSTRUMENT = 0.40  # asking the customer to re-enter a card for OUR outage
+PROMPT_CUSTOMER_OTP    = 0.30  # customer cannot fix a gateway timeout
+REQUEST_NEW_MANDATE    = 0.20  # wrong tool entirely
+SUPPRESS_DO_NOT_RETRY  = 0.00  # abandons the most recoverable class in the corpus
+ESCALATE_MANUAL_REVIEW = 0.00  # human review of an infra blip is pure cost
+
+[base.BANK_DOWNTIME]
+RETRY_NOW              = 0.17  # THE naive-retry trap: the immediate retry hits the same outage window
+RETRY_AFTER_BACKOFF    = 0.71  # the outage has cleared. Same payment, same card, 4x the money
+RETRY_AT_PAYDAY        = 0.66  # succeeds, but waits days for something that resolved in hours
+SWITCH_RAIL_TO_UPI     = 0.48  # routes around the down bank; works when the issuer, not the PSP, is down
+REQUEST_NEW_INSTRUMENT = 0.30  # blames the customer for the bank being down
+PROMPT_CUSTOMER_OTP    = 0.22  # the customer was never the failure point
+REQUEST_NEW_MANDATE    = 0.18  # wrong tool
+SUPPRESS_DO_NOT_RETRY  = 0.00  # gives up on a class that recovers 71% with patience
+ESCALATE_MANUAL_REVIEW = 0.00  # a human cannot make a bank come back faster
+
+[base.INSUFFICIENT_FUNDS]
+RETRY_NOW              = 0.06  # an account balance does not change in the seconds between retries
+RETRY_AFTER_BACKOFF    = 0.19  # a day later, some accounts have been topped up
+RETRY_AT_PAYDAY        = 0.42  # aligned to the salary cycle. Timing IS the intervention here
+SWITCH_RAIL_TO_UPI     = 0.09  # a different rail into the same empty account
+REQUEST_NEW_INSTRUMENT = 0.21  # a genuinely different funding source can work
+PROMPT_CUSTOMER_OTP    = 0.04  # authentication was never the problem
+REQUEST_NEW_MANDATE    = 0.08  # does not create money
+SUPPRESS_DO_NOT_RETRY  = 0.00  # writes off 42% of the largest class in the corpus
+ESCALATE_MANUAL_REVIEW = 0.00  # nothing for a human to decide
+
+[base.EXPIRED_CARD]
+RETRY_NOW              = 0.01  # deterministic decline. The card is still expired. Near-total waste
+RETRY_AFTER_BACKOFF    = 0.01  # still expired tomorrow
+RETRY_AT_PAYDAY        = 0.02  # still expired next week
+SWITCH_RAIL_TO_UPI     = 0.33  # UPI does not care about card expiry -- the strongest move here
+REQUEST_NEW_INSTRUMENT = 0.28  # correct intervention, but gated on customer response rate
+PROMPT_CUSTOMER_OTP    = 0.03  # no OTP will un-expire a card
+REQUEST_NEW_MANDATE    = 0.12  # only helps if the mandate is card-backed
+SUPPRESS_DO_NOT_RETRY  = 0.00  # correct on cost, but leaves 33% on the table vs switching rail
+ESCALATE_MANUAL_REVIEW = 0.00  # nothing to review
+
+[base.OTP_TIMEOUT]
+RETRY_NOW              = 0.11  # a silent retry cannot produce an OTP the customer never entered
+RETRY_AFTER_BACKOFF    = 0.24  # helps mainly the otp_attempts_exceeded subset, once the block lapses
+RETRY_AT_PAYDAY        = 0.12  # irrelevant delay for an attention problem
+SWITCH_RAIL_TO_UPI     = 0.31  # UPI PIN entry beats card 3DS on completion rate
+REQUEST_NEW_INSTRUMENT = 0.18  # the instrument was fine; this asks the wrong question
+PROMPT_CUSTOMER_OTP    = 0.45  # re-engage the customer directly. Highest, but it costs a contact
+REQUEST_NEW_MANDATE    = 0.10  # wrong tool
+SUPPRESS_DO_NOT_RETRY  = 0.00  # abandons a customer who was seconds from paying
+ESCALATE_MANUAL_REVIEW = 0.00  # not a manual-review problem
+
+[base.RISK_DECLINE]
+RETRY_NOW              = 0.03  # repeat attempts RAISE the risk score. Retrying is counterproductive
+RETRY_AFTER_BACKOFF    = 0.08  # a cooling-off period helps slightly
+RETRY_AT_PAYDAY        = 0.09  # a longer cooling-off period helps slightly more
+SWITCH_RAIL_TO_UPI     = 0.34  # a different rail carries a different risk model. The real play
+REQUEST_NEW_INSTRUMENT = 0.22  # a different card may not trip the same rule
+PROMPT_CUSTOMER_OTP    = 0.05  # the decline was not an authentication failure
+REQUEST_NEW_MANDATE    = 0.06  # wrong tool
+SUPPRESS_DO_NOT_RETRY  = 0.00  # defensible: stops digging. Costs the 34% that switching rail would find
+ESCALATE_MANUAL_REVIEW = 0.00  # correct governance for genuine fraud signals, zero automated recovery
+
+[base.INVALID_VPA]
+RETRY_NOW              = 0.02  # a wrong VPA is equally wrong on attempt three
+RETRY_AFTER_BACKOFF    = 0.21  # entirely driven by the vpa_resolution_failed subset (VP-003)
+RETRY_AT_PAYDAY        = 0.03  # funds were never the issue
+SWITCH_RAIL_TO_UPI     = 0.02  # already on UPI; this is a no-op
+REQUEST_NEW_INSTRUMENT = 0.36  # collect a VPA that actually resolves. The correct fix
+PROMPT_CUSTOMER_OTP    = 0.10  # no OTP stage was reached
+REQUEST_NEW_MANDATE    = 0.07  # wrong tool
+SUPPRESS_DO_NOT_RETRY  = 0.00  # right for VP-001/002, wrong for VP-003. This is why per-reason matters
+ESCALATE_MANUAL_REVIEW = 0.00  # a human cannot invent a valid VPA
+
+[base.MANDATE_FAILURE]
+RETRY_NOW              = 0.09  # only the timeout subset (MF-004/005) is transient; the rest are terminal
+RETRY_AFTER_BACKOFF    = 0.27  # gives the PSP time to answer, which fixes MF-004/005
+RETRY_AT_PAYDAY        = 0.10  # not a funds problem
+SWITCH_RAIL_TO_UPI     = 0.14  # UPI Autopay is not always enabled for the customer
+REQUEST_NEW_INSTRUMENT = 0.15  # partially helps; the mandate itself still needs re-registering
+PROMPT_CUSTOMER_OTP    = 0.08  # authentication was not the blocker
+REQUEST_NEW_MANDATE    = 0.38  # re-register. Correct for the terminal majority, costs a contact
+SUPPRESS_DO_NOT_RETRY  = 0.00  # abandons a recurring revenue stream, not just one payment
+ESCALATE_MANUAL_REVIEW = 0.00  # nothing to review
+
+[base.UNKNOWN]
+# Blended across the whole corpus, because by definition we do not know what
+# this is. Every value here is an admission of ignorance, and the gap between
+# these and the class-specific numbers above is exactly what a Day-2 LLM
+# classifier has to earn.
+RETRY_NOW              = 0.20  # corpus-average retry success
+RETRY_AFTER_BACKOFF    = 0.26  # corpus-average with patience
+RETRY_AT_PAYDAY        = 0.22
+SWITCH_RAIL_TO_UPI     = 0.24
+REQUEST_NEW_INSTRUMENT = 0.23
+PROMPT_CUSTOMER_OTP    = 0.16
+REQUEST_NEW_MANDATE    = 0.14
+SUPPRESS_DO_NOT_RETRY  = 0.00
+ESCALATE_MANUAL_REVIEW = 0.00  # the honest action when the system does not know

@@ -1,0 +1,425 @@
+# ============================================================================
+# Failure-class rules table  --  DATA, not code.
+#
+# Every `reason` string below is verbatim from Razorpay's own published error
+# reason list (data/reference/razorpay_error_reasons.csv, 114 reasons), sourced
+# from razorpay.com/docs/build/browser/assets/images/payments_error_reasons.xlsx
+#
+# app/diagnosis/rules.py only loads and indexes this file. There is no if/else
+# on error codes anywhere in the codebase. scripts/render_rules_table.py
+# regenerates the README table from this file, so the docs cannot drift.
+#
+# Fields
+#   rule_id            stable identifier, appears in every audit record
+#   reason             Razorpay error.reason (the match key)
+#   razorpay_code      Razorpay top-level error.code
+#   failure_class      our diagnosis bucket
+#   retriable          can the SAME instrument on the SAME rail ever clear?
+#   recommended_action from app/models.py::RecoveryAction
+#   min_wait_hours     how long before a retry is even worth attempting
+#   rationale          why. This is what gets read out to a panel.
+# ============================================================================
+
+schema_version = 3
+
+# CHANGELOG
+# v2: EC-001/002 and OT-001/002/003/005 moved from a customer-contact action to
+#     SWITCH_RAIL_TO_UPI. A contact is one-shot and lands ~35% of the time; an
+#     alternate rail lands ~65%. Measured against the recovery-window oracle,
+#     recommending contact for these six reasons was leaving Rs 26,276 on the
+#     table across a 300-payment corpus -- a defect in this table, not a limit
+#     of the system. Fixed here so that no later arm can claim that money as if
+#     it had inferred something.
+# v3: fallback action ESCALATE_MANUAL_REVIEW -> SWITCH_RAIL_TO_UPI. Escalation
+#     recovers nothing automatically, which made the unmapped long tail look
+#     like a gap only AI could close. It was worth Rs 79,023 to a one-line
+#     change. The control now uses the best generic fallback available.
+
+# ---------------------------------------------------------------- UNKNOWN ---
+# Fallback when no rule matches. Reached often and on purpose: Razorpay
+# publishes 110 distinct reasons and this table covers 35, so roughly a third of
+# real volume lands here.
+#
+# The action matters more than it looks. Measured on a 300-payment corpus:
+#
+#   ESCALATE_MANUAL_REVIEW   Rs 206,905   (recovers nothing automatically)
+#   RETRY_AFTER_BACKOFF 6h   Rs 280,351
+#   REQUEST_NEW_INSTRUMENT   Rs 282,679
+#   SWITCH_RAIL_TO_UPI       Rs 285,928   <- chosen
+#
+# Escalating everything unmapped would have handed a Day-2 classifier Rs 79,023
+# that a one-line change to this file earns without any intelligence at all.
+# The control is deliberately set to the strongest generic guess so that
+# anything a smarter arm claims above it has actually been earned.
+[fallback]
+failure_class = "UNKNOWN"
+retriable = true
+recommended_action = "SWITCH_RAIL_TO_UPI"
+min_wait_hours = 0.0
+rationale = "No rule matched. When the cause is unknown, changing the rail is the best generic move: it sidesteps whatever the instrument-specific problem was without asking the customer for anything."
+
+# ------------------------------------------------------ INSUFFICIENT_FUNDS ---
+
+[[rule]]
+rule_id = "IF-001"
+reason = "insufficient_funds"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "INSUFFICIENT_FUNDS"
+retriable = true
+recommended_action = "RETRY_AT_PAYDAY"
+min_wait_hours = 72.0
+rationale = "An account balance changes on the salary cycle, not on a retry timer. Timing is the entire intervention."
+
+[[rule]]
+rule_id = "IF-002"
+reason = "credit_limit_exceeded"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "INSUFFICIENT_FUNDS"
+retriable = true
+recommended_action = "RETRY_AT_PAYDAY"
+min_wait_hours = 72.0
+rationale = "Cardless-EMI credit limit resets on the statement cycle. Same timing logic as a bank balance."
+
+[[rule]]
+rule_id = "IF-003"
+reason = "funds_blocked_by_mandate"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "INSUFFICIENT_FUNDS"
+retriable = true
+recommended_action = "RETRY_AFTER_BACKOFF"
+min_wait_hours = 24.0
+rationale = "A one-time-mandate hold is temporary. The funds reappear when the hold releases."
+
+# ----------------------------------------------------------- BANK_DOWNTIME ---
+
+[[rule]]
+rule_id = "BD-001"
+reason = "bank_not_available"
+razorpay_code = "GATEWAY_ERROR"
+failure_class = "BANK_DOWNTIME"
+retriable = true
+recommended_action = "RETRY_AFTER_BACKOFF"
+min_wait_hours = 2.0
+rationale = "Issuer outage windows run minutes to hours. An immediate retry lands inside the same outage."
+
+[[rule]]
+rule_id = "BD-002"
+reason = "bank_technical_error"
+razorpay_code = "GATEWAY_ERROR"
+failure_class = "BANK_DOWNTIME"
+retriable = true
+recommended_action = "RETRY_AFTER_BACKOFF"
+min_wait_hours = 2.0
+rationale = "Core Banking System fault while processing. Transient, but not second-scale transient."
+
+[[rule]]
+rule_id = "BD-003"
+reason = "issuer_technical_error"
+razorpay_code = "GATEWAY_ERROR"
+failure_class = "BANK_DOWNTIME"
+retriable = true
+recommended_action = "RETRY_AFTER_BACKOFF"
+min_wait_hours = 2.0
+rationale = "Technical fault at the issuer. Recovers on the issuer timeline, not ours."
+
+[[rule]]
+rule_id = "BD-004"
+reason = "bank_cutoff_in_progress"
+razorpay_code = "GATEWAY_ERROR"
+failure_class = "BANK_DOWNTIME"
+retriable = true
+recommended_action = "RETRY_AFTER_BACKOFF"
+min_wait_hours = 3.0
+rationale = "Scheduled CBS cutoff. The most predictable failure in the whole table: it always ends."
+
+[[rule]]
+rule_id = "BD-005"
+reason = "psp_not_available"
+razorpay_code = "GATEWAY_ERROR"
+failure_class = "BANK_DOWNTIME"
+retriable = true
+recommended_action = "RETRY_AFTER_BACKOFF"
+min_wait_hours = 1.0
+rationale = "PSP-side downtime. UPI infrastructure recovers faster than card rails, so a shorter wait."
+
+[[rule]]
+rule_id = "BD-006"
+reason = "upi_app_technical_error"
+razorpay_code = "GATEWAY_ERROR"
+failure_class = "BANK_DOWNTIME"
+retriable = true
+recommended_action = "RETRY_AFTER_BACKOFF"
+min_wait_hours = 1.0
+rationale = "Fault in the customer own PSP app. Clears without any action from us."
+
+[[rule]]
+rule_id = "BD-007"
+reason = "payment_declined_due_to_high_traffic"
+razorpay_code = "GATEWAY_ERROR"
+failure_class = "BANK_DOWNTIME"
+retriable = true
+recommended_action = "RETRY_AFTER_BACKOFF"
+min_wait_hours = 1.0
+rationale = "Bank saturated by a TPS surge. Retrying immediately adds load to the thing that is already failing."
+
+# ------------------------------------------------------------ EXPIRED_CARD ---
+
+[[rule]]
+rule_id = "EC-001"
+reason = "card_expired"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "EXPIRED_CARD"
+retriable = false
+recommended_action = "SWITCH_RAIL_TO_UPI"
+min_wait_hours = 0.0
+rationale = "Card is dead, but the customer is not. UPI works right now and asks less of them than re-entering a card."
+
+[[rule]]
+rule_id = "EC-002"
+reason = "incorrect_card_expiry_date"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "EXPIRED_CARD"
+retriable = false
+recommended_action = "SWITCH_RAIL_TO_UPI"
+min_wait_hours = 0.0
+rationale = "Stored expiry is wrong. Rather than ask them to fix it, route around the card entirely."
+
+# ------------------------------------------------------------- OTP_TIMEOUT ---
+
+[[rule]]
+rule_id = "OT-001"
+reason = "otp_expired"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "OTP_TIMEOUT"
+retriable = true
+recommended_action = "SWITCH_RAIL_TO_UPI"
+min_wait_hours = 0.0
+rationale = "A fresh OTP needs the customer either way -- and UPI PIN entry completes far more often than card 3DS."
+
+[[rule]]
+rule_id = "OT-002"
+reason = "incorrect_otp"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "OTP_TIMEOUT"
+retriable = true
+recommended_action = "SWITCH_RAIL_TO_UPI"
+min_wait_hours = 0.0
+rationale = "They mistyped once and will again. Move them to the rail with the better completion rate."
+
+[[rule]]
+rule_id = "OT-003"
+reason = "authentication_failed"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "OTP_TIMEOUT"
+retriable = true
+recommended_action = "SWITCH_RAIL_TO_UPI"
+min_wait_hours = 0.0
+rationale = "3DS abandonment is a friction problem. The fix is less friction, not another 3DS prompt."
+
+[[rule]]
+rule_id = "OT-004"
+reason = "otp_attempts_exceeded"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "OTP_TIMEOUT"
+retriable = true
+recommended_action = "RETRY_AFTER_BACKOFF"
+min_wait_hours = 12.0
+rationale = "Issuer has temporarily blocked the card. Contacting the customer now cannot help; the block must expire first."
+
+[[rule]]
+rule_id = "OT-005"
+reason = "payment_session_expired"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "OTP_TIMEOUT"
+retriable = true
+recommended_action = "SWITCH_RAIL_TO_UPI"
+min_wait_hours = 0.0
+rationale = "Session died, instrument is fine. Re-open on UPI rather than rebuild the card flow."
+
+# --------------------------------------------------------- GATEWAY_TIMEOUT ---
+
+[[rule]]
+rule_id = "GT-001"
+reason = "gateway_technical_error"
+razorpay_code = "GATEWAY_ERROR"
+failure_class = "GATEWAY_TIMEOUT"
+retriable = true
+recommended_action = "RETRY_NOW"
+min_wait_hours = 0.0
+rationale = "Transient infrastructure fault. This is the one class where retrying immediately is genuinely correct."
+
+[[rule]]
+rule_id = "GT-002"
+reason = "request_timed_out"
+razorpay_code = "GATEWAY_ERROR"
+failure_class = "GATEWAY_TIMEOUT"
+retriable = true
+recommended_action = "RETRY_NOW"
+min_wait_hours = 0.0
+rationale = "No terminal state was ever reached, so nothing was actually declined."
+
+[[rule]]
+rule_id = "GT-003"
+reason = "payment_timed_out"
+razorpay_code = "GATEWAY_ERROR"
+failure_class = "GATEWAY_TIMEOUT"
+retriable = true
+recommended_action = "RETRY_NOW"
+min_wait_hours = 0.0
+rationale = "Gateway returned no response. Retry is the only way to learn the real outcome."
+
+[[rule]]
+rule_id = "GT-004"
+reason = "invalid_response_from_gateway"
+razorpay_code = "GATEWAY_ERROR"
+failure_class = "GATEWAY_TIMEOUT"
+retriable = true
+recommended_action = "RETRY_NOW"
+min_wait_hours = 0.0
+rationale = "Malformed response, not a decline. The customer instrument was never the problem."
+
+[[rule]]
+rule_id = "GT-005"
+reason = "server_error"
+razorpay_code = "SERVER_ERROR"
+failure_class = "GATEWAY_TIMEOUT"
+retriable = true
+recommended_action = "RETRY_NOW"
+min_wait_hours = 0.0
+rationale = "Fault on the Razorpay side. Nothing about the payment itself is wrong."
+
+[[rule]]
+rule_id = "GT-006"
+reason = "payment_collect_request_expired"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "GATEWAY_TIMEOUT"
+retriable = true
+recommended_action = "RETRY_NOW"
+min_wait_hours = 0.0
+rationale = "The 5-10 minute UPI collect window lapsed. Re-sending the request costs nothing and often works."
+
+# ------------------------------------------------------------ RISK_DECLINE ---
+
+[[rule]]
+rule_id = "RD-001"
+reason = "payment_risk_check_failed"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "RISK_DECLINE"
+retriable = false
+recommended_action = "ESCALATE_MANUAL_REVIEW"
+min_wait_hours = 0.0
+rationale = "Retrying a risk decline raises the risk score further. The naive arm actively makes this one worse."
+
+[[rule]]
+rule_id = "RD-002"
+reason = "card_declined"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "RISK_DECLINE"
+retriable = true
+recommended_action = "SWITCH_RAIL_TO_UPI"
+min_wait_hours = 6.0
+rationale = "The issuer will not say why. Since we cannot diagnose it, change the rail instead of repeating the question."
+
+[[rule]]
+rule_id = "RD-003"
+reason = "payment_declined"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "RISK_DECLINE"
+retriable = true
+recommended_action = "SWITCH_RAIL_TO_UPI"
+min_wait_hours = 6.0
+rationale = "Opaque issuer or gateway decline. Same reasoning as card_declined: route around the silence."
+
+[[rule]]
+rule_id = "RD-004"
+reason = "international_transaction_not_allowed"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "RISK_DECLINE"
+retriable = false
+recommended_action = "SWITCH_RAIL_TO_UPI"
+min_wait_hours = 0.0
+rationale = "This card can never clear this transaction. A domestic rail can. Retrying the card is a guaranteed loss."
+
+# ------------------------------------------------------------- INVALID_VPA ---
+
+[[rule]]
+rule_id = "VP-001"
+reason = "invalid_vpa"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "INVALID_VPA"
+retriable = false
+recommended_action = "REQUEST_NEW_INSTRUMENT"
+min_wait_hours = 0.0
+rationale = "The VPA is wrong or unregistered. It will be equally wrong on attempt three. Contrast VP-003."
+
+[[rule]]
+rule_id = "VP-002"
+reason = "psp_not_registered"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "INVALID_VPA"
+retriable = false
+recommended_action = "REQUEST_NEW_INSTRUMENT"
+min_wait_hours = 0.0
+rationale = "No PSP registered on the customer device. Needs a different handle, not another attempt."
+
+[[rule]]
+rule_id = "VP-003"
+reason = "vpa_resolution_failed"
+razorpay_code = "GATEWAY_ERROR"
+failure_class = "INVALID_VPA"
+retriable = true
+recommended_action = "RETRY_AFTER_BACKOFF"
+min_wait_hours = 1.0
+rationale = "NPCI resolution service failed -- an infrastructure fault, NOT a bad VPA. Looks like VP-001, opposite correct action."
+
+# ---------------------------------------------------------- MANDATE_FAILURE ---
+
+[[rule]]
+rule_id = "MF-001"
+reason = "mandate_creation_failed"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "MANDATE_FAILURE"
+retriable = false
+recommended_action = "REQUEST_NEW_MANDATE"
+min_wait_hours = 0.0
+rationale = "Terminal state per the Razorpay docs. A new mandate must be created; the old one is dead."
+
+[[rule]]
+rule_id = "MF-002"
+reason = "mandate_creation_declined"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "MANDATE_FAILURE"
+retriable = false
+recommended_action = "REQUEST_NEW_MANDATE"
+min_wait_hours = 0.0
+rationale = "Declined by an entity in the chain. Terminal; re-registration is the only path."
+
+[[rule]]
+rule_id = "MF-003"
+reason = "mandate_creation_expired"
+razorpay_code = "BAD_REQUEST_ERROR"
+failure_class = "MANDATE_FAILURE"
+retriable = false
+recommended_action = "REQUEST_NEW_MANDATE"
+min_wait_hours = 0.0
+rationale = "The registration window closed. Nothing to retry against."
+
+[[rule]]
+rule_id = "MF-004"
+reason = "mandate_creation_timeout"
+razorpay_code = "GATEWAY_ERROR"
+failure_class = "MANDATE_FAILURE"
+retriable = true
+recommended_action = "RETRY_AFTER_BACKOFF"
+min_wait_hours = 4.0
+rationale = "A timeout is a technical failure, not a refusal. Unlike MF-001 to MF-003 this one can still succeed."
+
+[[rule]]
+rule_id = "MF-005"
+reason = "reqauth_mandate_not_acknowledged"
+razorpay_code = "GATEWAY_ERROR"
+failure_class = "MANDATE_FAILURE"
+retriable = true
+recommended_action = "RETRY_AFTER_BACKOFF"
+min_wait_hours = 4.0
+rationale = "The PSP never answered the authorisation request, which means PSP downtime rather than customer refusal."
