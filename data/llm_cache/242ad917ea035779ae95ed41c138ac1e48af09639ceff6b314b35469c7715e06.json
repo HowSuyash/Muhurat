@@ -1,0 +1,11 @@
+{
+  "_model": "claude-opus-5",
+  "_provenance": "claude-opus-5 reasoning over Razorpay's published error descriptions in an interactive session (2026-09-05). NOT a live API call from this repo. Re-run `python -m scripts.build_llm_cache --api` with ANTHROPIC_API_KEY set to regenerate via the API.",
+  "confidence": 0.85,
+  "failure_class": "UNKNOWN",
+  "min_wait_hours": 0.0,
+  "reason": "card_number_invalid",
+  "reasoning": "The number matches no BIN, so it is simply wrong and only the customer can correct it.",
+  "recommended_action": "REQUEST_NEW_INSTRUMENT",
+  "retriable": false
+}

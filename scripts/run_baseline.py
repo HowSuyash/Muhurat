@@ -31,12 +31,26 @@ from app.policy.max_wait import MaxWaitPolicy
 from app.policy.naive import NaiveRetryPolicy
 from app.policy.rules_recommended import RulesRecommendedPolicy
 
-ARMS = {
-    "naive_retry_3x": NaiveRetryPolicy,
-    "backoff_skip": BackoffSkipPolicy,
-    "rules_recommended": RulesRecommendedPolicy,
-    "max_wait_probe": MaxWaitPolicy,
+#: arm -> (policy class, classifier kind). `llm_recommended` runs the SAME
+#: policy as `rules_recommended` and differs ONLY in the classifier, so the gap
+#: between them is exactly what the model contributed -- no policy change is
+#: mixed in to muddy the attribution.
+ARMS: dict[str, tuple[type, str]] = {
+    "naive_retry_3x": (NaiveRetryPolicy, "rules"),
+    "backoff_skip": (BackoffSkipPolicy, "rules"),
+    "rules_recommended": (RulesRecommendedPolicy, "rules"),
+    "llm_recommended": (RulesRecommendedPolicy, "llm"),
+    "max_wait_probe": (MaxWaitPolicy, "rules"),
 }
+
+
+def build_classifier(kind: str, allow_api: bool = False):
+    """Both satisfy the same Classifier Protocol."""
+    if kind == "llm":
+        from app.diagnosis.llm_classifier import LLMClassifier
+
+        return LLMClassifier(allow_api=allow_api)
+    return RulesClassifier()
 
 RUNS_DIR = Path(__file__).resolve().parents[1] / "data" / "runs"
 LATEST_PATH = RUNS_DIR / "latest.json"
@@ -63,6 +77,12 @@ def main() -> None:
     ap.add_argument("--executor", choices=["window", "legacy"], default="window")
     ap.add_argument("--corpus-version", choices=["v1", "v2"], default="v2")
     ap.add_argument("--arm", choices=[*ARMS, "all"], default="all")
+    ap.add_argument(
+        "--allow-api",
+        action="store_true",
+        help="let the LLM arm make live API calls on a cache miss (needs ANTHROPIC_API_KEY). "
+             "Off by default so the benchmark is offline and free.",
+    )
     args = ap.parse_args()
 
     corpus_path = corpus_path_for(args.seed, args.n, version=args.corpus_version)
@@ -73,7 +93,6 @@ def main() -> None:
         )
 
     payments = read_corpus(corpus_path)
-    classifier = RulesClassifier()
     executor = build_executor(args.executor, args.seed, args.n)
 
     selected = list(ARMS) if args.arm == "all" else [args.arm]
@@ -86,7 +105,9 @@ def main() -> None:
     for arm_name in selected:
         # The probe is a single-shot arm by definition; the others honour the flag.
         cap = 1 if arm_name == "max_wait_probe" else args.max_attempts
-        policy = ARMS[arm_name](max_attempts=cap)
+        policy_cls, classifier_kind = ARMS[arm_name]
+        policy = policy_cls(max_attempts=cap)
+        classifier = build_classifier(classifier_kind, allow_api=args.allow_api)
         run_id, records = run_arm(
             payments,
             classifier=classifier,
@@ -102,6 +123,15 @@ def main() -> None:
             f"{arm_name:<18} run_id={run_id}  decisions={len(records):>4}"
             f"  recovered=Rs {recovered / 100:>11,.2f}"
         )
+        stats = getattr(classifier, "stats", None)
+        if stats:
+            # Exactly where each diagnosis came from, so nobody has to take the
+            # arm's headline on trust.
+            print(
+                f"{'':<18} classifier: rules={stats['rules_hit']} cache={stats['cache_hit']}"
+                f" api={stats['api_call']} low_conf={stats['low_confidence']}"
+                f" err_fallback={stats['error_fallback']} cache_miss={stats['cache_miss']}"
+            )
 
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     LATEST_PATH.write_text(

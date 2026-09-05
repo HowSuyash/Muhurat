@@ -309,6 +309,94 @@ def main() -> None:
             str(divergent[:3]),
         )
 
+    # --- L9-L12: the LLM sees only pre-decision fields -------------------------
+    # The model must never see the outcome, the recovery label, the hidden
+    # window, or anything else from the future. The prompt is the entire
+    # attack surface, so it is checked directly rather than by inspection.
+    from app.diagnosis.llm_classifier import (
+        PROMPT_VISIBLE_FIELDS,
+        LLMCache,
+        LLMClassifier,
+        build_prompt,
+        cache_key,
+    )
+
+    truth_for_llm = ground_truth_path_for(42, 300, DEFAULT_CORPUS_DIR)
+    corpus_for_llm = corpus_path_for(42, 300)
+    if truth_for_llm.exists() and corpus_for_llm.exists():
+        print()
+        print("  LLM containment (L9-L12) -- can the model see anything it should not?")
+        tmap = load_ground_truth(truth_for_llm)
+        pays = read_corpus(corpus_for_llm)
+
+        # L9: the prompt contains no future/outcome/window value, for any payment.
+        forbidden_hits = []
+        for pay in pays:
+            prompt = build_prompt(pay.error)
+            t = tmap[pay.payment_id]
+            for ts in t.all_timestamps():
+                if ts in prompt:
+                    forbidden_hits.append((pay.payment_id, "window timestamp"))
+            if t.blocker and t.blocker in prompt:
+                forbidden_hits.append((pay.payment_id, "blocker"))
+            if str(pay.amount_paise) in prompt:
+                forbidden_hits.append((pay.payment_id, "amount"))
+            if pay.customer_id in prompt:
+                forbidden_hits.append((pay.payment_id, "customer_id"))
+            if pay.created_at in prompt:
+                forbidden_hits.append((pay.payment_id, "timestamp"))
+        check("L9 LLM prompt leaks no window, outcome, amount, customer or timestamp",
+              not forbidden_hits, str(forbidden_hits[:3]))
+
+        # L10: the prompt is built ONLY from whitelisted error fields. Mutating
+        # any whitelisted field must change the prompt; nothing else exists to
+        # change, because the signature accepts only the error object.
+        sample = pays[0].error
+        from dataclasses import replace as _replace
+
+        insensitive = []
+        for field in PROMPT_VISIBLE_FIELDS:
+            mutated = _replace(sample, **{field: "SENTINEL_XYZ"})
+            if "SENTINEL_XYZ" not in build_prompt(mutated):
+                insensitive.append(field)
+        check("L10 every whitelisted field actually reaches the prompt",
+              not insensitive, str(insensitive))
+
+        # L11: the cache key is a pure function of the prompt -- two payments
+        # sharing a reason share a cache entry, so no per-payment data can hide
+        # in the key.
+        by_reason = {}
+        collisions_ok = True
+        for pay in pays:
+            k = cache_key(build_prompt(pay.error))
+            prev = by_reason.setdefault(pay.error.reason, k)
+            if prev != k:
+                collisions_ok = False
+        check("L11 cache key depends only on the reason, not the payment", collisions_ok)
+
+        # L12: every cached verdict records its provenance, so a reader can tell
+        # a live API answer from a seeded one.
+        cache = LLMCache()
+        import json as _json
+
+        missing_prov = [
+            f.name for f in cache.dir.glob("*.json")
+            if not _json.loads(f.read_text(encoding="utf-8")).get("_provenance")
+        ]
+        check(f"L12 all {len(list(cache.dir.glob('*.json')))} cached verdicts record provenance",
+              not missing_prov, str(missing_prov[:3]))
+
+        # L13: with the API disabled and the cache present, the LLM arm must
+        # never silently guess -- every diagnosis is a rule, a cached verdict,
+        # or an explicit logged fallback.
+        clf = LLMClassifier(allow_api=False)
+        for pay in pays:
+            clf.classify(pay.error)
+        accounted = (clf.stats["rules_hit"] + clf.stats["cache_hit"])
+        check("L13 every LLM-arm diagnosis is a rule hit or a cached verdict",
+              accounted == len(pays) and clf.stats["cache_miss"] == 0,
+              f"{accounted}/{len(pays)}, cache_miss={clf.stats['cache_miss']}")
+
     # --- L1-L8: the integrity claim -------------------------------------------
     truth_path = ground_truth_path_for(42, 300, DEFAULT_CORPUS_DIR)
     corpus_file = corpus_path_for(42, 300)
