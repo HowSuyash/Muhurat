@@ -23,8 +23,8 @@ reproduces offline with no API spend.
 
 ## See it running
 
-**Live dashboard — nothing to install:**
-https://claude.ai/code/artifact/25dae778-c7f6-43e4-8aef-2a18a9704b10
+**Live dashboard**
+https://muhurat-27h5utppz-suyash25.vercel.app/
 
 Six pages: the problem, the hidden-window mechanic (with a slider you can drag), a working
 **advisor**, a **replay** of fourteen days in twenty seconds, the seven policies, and the
